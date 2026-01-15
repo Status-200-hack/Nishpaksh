@@ -193,7 +193,7 @@ export default function Home() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-900/30 border border-blue-800 text-blue-400 text-xs font-bold tracking-wider mb-8">
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                NETWORK LIVE: PHASE III ELECTIONS
+                NETWORK LIVE: BMC ELECTIONS
               </div>
 
               <h1 className="text-5xl md:text-7xl font-extrabold text-white leading-tight mb-6">
@@ -238,7 +238,7 @@ export default function Home() {
                   <div className="w-full flex justify-between items-end border-t border-gray-700 pt-6">
                     <div>
                       <p className="text-xs text-gray-500 font-bold tracking-widest uppercase mb-1">Live Node Map</p>
-                      <p className="text-xl font-bold text-white">New Delhi, India</p>
+                      <p className="text-xl font-bold text-white">Mumbai, India</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500 font-bold tracking-widest uppercase mb-1">Active Validators</p>
