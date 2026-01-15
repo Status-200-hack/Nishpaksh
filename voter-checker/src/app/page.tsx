@@ -5,6 +5,38 @@ import VoterForm from '@/components/VoterForm'
 import VoterDetails from '@/components/VoterDetails'
 import ConnectWallet from '@/components/ConnectWallet'
 
+// Helper function to update aggregated voter demographics
+function updateVoterDemographics(gender: string | null, age: number | null) {
+  if (typeof window === 'undefined') return
+  
+  try {
+    // Get existing demographics
+    const existingStr = localStorage.getItem('voterDemographics')
+    let demographics = existingStr ? JSON.parse(existingStr) : { male: 0, female: 0, other: 0, ages: [] }
+    
+    // Update gender count
+    if (gender) {
+      if (gender === 'M' || gender === 'Male') {
+        demographics.male = (demographics.male || 0) + 1
+      } else if (gender === 'F' || gender === 'Female') {
+        demographics.female = (demographics.female || 0) + 1
+      } else {
+        demographics.other = (demographics.other || 0) + 1
+      }
+    }
+    
+    // Update age list
+    if (age) {
+      if (!demographics.ages) demographics.ages = []
+      demographics.ages.push(age)
+    }
+    
+    localStorage.setItem('voterDemographics', JSON.stringify(demographics))
+  } catch (error) {
+    console.error('Error updating demographics:', error)
+  }
+}
+
 export default function Home() {
   const [voterData, setVoterData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -59,6 +91,20 @@ export default function Home() {
 
       if (data.success) {
         setVoterData(data.data)
+        // Store EPIC number and voter demographics in localStorage for voting
+        if (typeof window !== 'undefined' && epicNumber) {
+          localStorage.setItem('voterEpicNumber', epicNumber.toUpperCase())
+          // Store voter data (gender, age) for results page
+          const voterData = {
+            epicNumber: epicNumber.toUpperCase(),
+            gender: data.data.gender || data.data.Gender || null,
+            age: data.data.age || data.data.Age || null,
+          }
+          localStorage.setItem('voterData', JSON.stringify(voterData))
+          
+          // Also update aggregated demographics
+          updateVoterDemographics(voterData.gender, voterData.age)
+        }
       } else {
         setError(data.message || 'No voter details found')
       }

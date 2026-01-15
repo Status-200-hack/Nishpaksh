@@ -2,7 +2,44 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { castVote } from '@/services/votingService'
+import Image from 'next/image'
+import { castVote, checkEpicVotedStatus } from '@/services/votingService'
+
+// Helper function to update aggregated voter demographics
+function updateVoterDemographics(gender: string | null, age: number | null) {
+    if (typeof window === 'undefined') return
+    
+    try {
+        // Get existing demographics
+        const existingStr = localStorage.getItem('voterDemographics')
+        let demographics = existingStr ? JSON.parse(existingStr) : { male: 0, female: 0, other: 0, ages: [] }
+        
+        // Update gender count
+        if (gender) {
+            const genderUpper = String(gender).toUpperCase()
+            if (genderUpper === 'M' || genderUpper === 'MALE') {
+                demographics.male = (demographics.male || 0) + 1
+            } else if (genderUpper === 'F' || genderUpper === 'FEMALE') {
+                demographics.female = (demographics.female || 0) + 1
+            } else {
+                demographics.other = (demographics.other || 0) + 1
+            }
+        }
+        
+        // Update age list
+        if (age) {
+            const ageNum = typeof age === 'string' ? parseInt(age) : age
+            if (!isNaN(ageNum) && ageNum > 0) {
+                if (!demographics.ages) demographics.ages = []
+                demographics.ages.push(ageNum)
+            }
+        }
+        
+        localStorage.setItem('voterDemographics', JSON.stringify(demographics))
+    } catch (error) {
+        console.error('Error updating demographics:', error)
+    }
+}
 
 interface Candidate {
     id: string
@@ -10,6 +47,7 @@ interface Candidate {
     party_name: string
     symbol: string
     ward_no: number
+    is_women_reserved?: boolean
 }
 
 export default function Dashboard() {
@@ -19,6 +57,9 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [wardName, setWardName] = useState("Detecting ward...")
     const [wardNoState, setWardNoState] = useState<number | null>(null)
+    const [epicNumber, setEpicNumber] = useState<string | null>(null)
+    const [hasVoted, setHasVoted] = useState<boolean>(false)
+    const [checkingVoteStatus, setCheckingVoteStatus] = useState(false)
 
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
     const [voteStep, setVoteStep] = useState<'idle' | 'confirm' | 'mining' | 'success' | 'error'>('idle')
@@ -26,12 +67,71 @@ export default function Dashboard() {
     const [voteError, setVoteError] = useState<string | null>(null)
 
     useEffect(() => {
+        // Get EPIC number from localStorage (set during voter verification)
+        if (typeof window !== 'undefined') {
+            const storedEpic = localStorage.getItem('voterEpicNumber')
+            if (storedEpic) {
+                setEpicNumber(storedEpic)
+            } else {
+                // Try to get from URL params
+                try {
+                    const params = new URLSearchParams(window.location.search)
+                    const epicParam = params.get('epic')
+                    if (epicParam) {
+                        setEpicNumber(epicParam)
+                        localStorage.setItem('voterEpicNumber', epicParam)
+                    }
+                } catch (e) {
+                    console.error('Error reading EPIC from URL:', e)
+                }
+            }
+        }
+
         const getAccount = async () => {
             if (typeof window !== 'undefined' && (window as any).ethereum) {
                 try {
                     const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' })
                     if (accounts && accounts.length > 0) {
                         setAccount(accounts[0])
+                    }
+                    
+                    // Ensure we're on the correct network
+                    const expectedChainId = BigInt(process.env.NEXT_PUBLIC_VOTING_CHAIN_ID ?? '31337')
+                    const hexChainId = '0x' + expectedChainId.toString(16)
+                    
+                    try {
+                        const currentChainId = await (window as any).ethereum.request({ method: 'eth_chainId' })
+                        if (currentChainId !== hexChainId) {
+                            // Try to switch network
+                            try {
+                                await (window as any).ethereum.request({
+                                    method: 'wallet_switchEthereumChain',
+                                    params: [{ chainId: hexChainId }],
+                                })
+                            } catch (switchErr: any) {
+                                // If network doesn't exist, add it
+                                if (switchErr.code === 4902) {
+                                    await (window as any).ethereum.request({
+                                        method: 'wallet_addEthereumChain',
+                                        params: [
+                                            {
+                                                chainId: hexChainId,
+                                                chainName: 'Hardhat Local',
+                                                nativeCurrency: {
+                                                    name: 'ETH',
+                                                    symbol: 'ETH',
+                                                    decimals: 18,
+                                                },
+                                                rpcUrls: ['http://127.0.0.1:8545'],
+                                                blockExplorerUrls: null,
+                                            },
+                                        ],
+                                    })
+                                }
+                            }
+                        }
+                    } catch (networkError) {
+                        console.warn('Network configuration warning:', networkError)
                     }
                 } catch (error) {
                     console.error('Error fetching account', error)
@@ -171,6 +271,28 @@ export default function Dashboard() {
         detectWardAndFetch()
     }, [])
 
+    // Check if EPIC has already voted
+    useEffect(() => {
+        const checkVoteStatus = async () => {
+            if (!epicNumber) return
+            
+            try {
+                setCheckingVoteStatus(true)
+                const voted = await checkEpicVotedStatus(epicNumber)
+                setHasVoted(voted)
+            } catch (error) {
+                console.error('Error checking vote status:', error)
+                // Don't block voting if check fails
+            } finally {
+                setCheckingVoteStatus(false)
+            }
+        }
+
+        if (epicNumber) {
+            checkVoteStatus()
+        }
+    }, [epicNumber])
+
     const closeVoteModal = () => {
         if (voteStep === 'mining') return
         setSelectedCandidate(null)
@@ -193,6 +315,11 @@ export default function Dashboard() {
             setVoteError('Ward not detected yet. Please refresh and try again.')
             return
         }
+        if (!epicNumber) {
+            setVoteStep('error')
+            setVoteError('EPIC number not found. Please verify your voter ID first.')
+            return
+        }
 
         setVoteStep('mining')
         setVoteError(null)
@@ -200,14 +327,47 @@ export default function Dashboard() {
 
         try {
             const { txHash } = await castVote({
+                epicNumber: epicNumber,
                 candidateId: selectedCandidate.id,
                 wardId: wardNoState,
             })
+            
+            // Store voter demographics when vote is cast
+            if (typeof window !== 'undefined') {
+                try {
+                    const voterDataStr = localStorage.getItem('voterData')
+                    if (voterDataStr) {
+                        const voterData = JSON.parse(voterDataStr)
+                        updateVoterDemographics(voterData.gender, voterData.age)
+                    }
+                } catch (error) {
+                    console.error('Error storing voter demographics:', error)
+                }
+            }
+            
             setTxHash(txHash)
             setVoteStep('success')
         } catch (e: any) {
-            const msg = e?.shortMessage || e?.message || 'Vote failed'
-            setVoteError(msg)
+            // Extract the most helpful error message
+            let errorMsg = 'Vote failed'
+            
+            if (e?.shortMessage) {
+                errorMsg = e.shortMessage
+            } else if (e?.reason) {
+                errorMsg = e.reason
+            } else if (e?.message) {
+                errorMsg = e.message
+            } else if (typeof e === 'string') {
+                errorMsg = e
+            }
+            
+            // Clean up common error messages
+            if (errorMsg.includes('coalesce')) {
+                errorMsg = 'Transaction failed. Please ensure:\n1. MetaMask is connected\n2. You have enough ETH for gas\n3. The contract is deployed correctly'
+            }
+            
+            console.error('Vote error:', e)
+            setVoteError(errorMsg)
             setVoteStep('error')
         }
     }
@@ -225,6 +385,76 @@ export default function Dashboard() {
         return inside
     }
 
+    // Get symbol image path - maps party names and symbols to image file paths
+    const getSymbolImagePath = (partyName: string, symbol: string, isWomenReserved?: boolean): string | null => {
+        if (!partyName && !symbol) return null
+        
+        const partyLower = (partyName || '').toLowerCase().trim()
+        const symbolLower = (symbol || '').toLowerCase().trim()
+        
+        // Handle Independent candidates first (gender-aware)
+        if (partyLower.includes('independent')) {
+            return `/party-symbols/${isWomenReserved ? 'generic-female.webp' : 'generic.webp'}`
+        }
+        
+        // Map party names to logo files (primary mapping - most reliable)
+        const partyMap: { [key: string]: string } = {
+            'bharatiya janata party': 'bjp-logo.webp',
+            'bjp': 'bjp-logo.webp',
+            'indian national congress': 'congress-logo.webp',
+            'congress': 'congress-logo.webp',
+            'shiv sena (uddhav balasaheb thackeray)': 'shivsena-ubt-logo.webp',
+            'shiv sena uddhav balasaheb thackeray': 'shivsena-ubt-logo.webp',
+            'shiv sena': 'shivsena-logo.webp',
+            'nationalist congress party': 'ncp-logo.webp',
+            'ncp': 'ncp-logo.webp',
+            'maharashtra navnirman sena': 'mns-logo.webp',
+            'mns': 'mns-logo.webp',
+            'bahujan samaj party': 'bahujan-party.webp',
+            'bahujan': 'bahujan-party.webp',
+            'samajwadi party': 'samaajvadi-logo.webp',
+            'samajwadi': 'samaajvadi-logo.webp',
+            'janata dal (secular)': 'jds-logo-badge.png',
+            'janata dal secular': 'jds-logo-badge.png',
+            'janata dal': 'jds-logo-badge.png',
+            'jds': 'jds-logo-badge.png',
+        }
+        
+        // Map symbols to logo files (fallback mapping)
+        const symbolMap: { [key: string]: string } = {
+            'lotus': 'bjp-logo.webp',
+            'hand': 'congress-logo.webp',
+            'flaming torch': 'shivsena-ubt-logo.webp',
+            'torch': 'shivsena-ubt-logo.webp',
+            'book': isWomenReserved ? 'generic-female.webp' : 'generic.webp',
+        }
+        
+        // First, try party name mapping (most reliable)
+        for (const [key, filename] of Object.entries(partyMap)) {
+            if (partyLower.includes(key) || partyLower === key) {
+                return `/party-symbols/${filename}`
+            }
+        }
+        
+        // Then, try symbol mapping
+        for (const [key, filename] of Object.entries(symbolMap)) {
+            if (symbolLower.includes(key) || symbolLower === key) {
+                return `/party-symbols/${filename}`
+            }
+        }
+        
+        // Fallback: try partial matches for party names
+        if (partyLower.includes('shiv sena') && partyLower.includes('uddhav')) {
+            return '/party-symbols/shivsena-ubt-logo.webp'
+        }
+        if (partyLower.includes('shiv sena')) {
+            return '/party-symbols/shivsena-logo.webp'
+        }
+        
+        return null
+    }
+
+    // Fallback emoji icons if image doesn't exist
     const getSymbolIcon = (symbol: string) => {
         const lower = symbol?.toLowerCase() || ''
         if (lower.includes('lotus')) return '🪷'
@@ -280,7 +510,27 @@ export default function Dashboard() {
                                     <div className="text-sm text-blue-400">{selectedCandidate.party_name}</div>
                                     <div className="text-xs text-gray-500 mt-1">Symbol: {selectedCandidate.symbol}</div>
                                 </div>
-                                <div className="text-3xl">{getSymbolIcon(selectedCandidate.symbol)}</div>
+                                <div className="text-3xl">
+                                    {getSymbolImagePath(
+                                        selectedCandidate.party_name, 
+                                        selectedCandidate.symbol,
+                                        selectedCandidate.is_women_reserved
+                                    ) ? (
+                                        <Image
+                                            src={getSymbolImagePath(
+                                                selectedCandidate.party_name, 
+                                                selectedCandidate.symbol,
+                                                selectedCandidate.is_women_reserved
+                                            )!}
+                                            alt={selectedCandidate.symbol}
+                                            width={48}
+                                            height={48}
+                                            className="object-contain"
+                                        />
+                                    ) : (
+                                        getSymbolIcon(selectedCandidate.symbol)
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -291,9 +541,14 @@ export default function Dashboard() {
                         )}
 
                         {voteStep === 'mining' && (
-                            <div className="flex items-center gap-3 text-sm text-gray-300 mb-4">
-                                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                Waiting for transaction confirmation...
+                            <div className="space-y-2 mb-4">
+                                <div className="flex items-center gap-3 text-sm text-gray-300">
+                                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                    Waiting for transaction confirmation...
+                                </div>
+                                <div className="text-xs text-yellow-400 bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-2">
+                                    <strong>Important:</strong> Check MetaMask popup! If you don't see it, click the MetaMask extension icon. Click "Confirm" to approve the transaction.
+                                </div>
                             </div>
                         )}
 
@@ -452,6 +707,23 @@ export default function Dashboard() {
                             <div>
                                 <h1 className="text-3xl font-bold text-white mb-2">{wardName}</h1>
                                 <p className="text-gray-400">Step 1 of 2: Select your preferred representative for the blockchain ballot.</p>
+                                {epicNumber && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <span className="text-xs text-gray-500">EPIC: {epicNumber}</span>
+                                        {checkingVoteStatus ? (
+                                            <span className="text-xs text-gray-400">Checking vote status...</span>
+                                        ) : hasVoted ? (
+                                            <span className="text-xs text-red-400 font-semibold">⚠️ Already Voted</span>
+                                        ) : (
+                                            <span className="text-xs text-green-400 font-semibold">✓ Eligible to Vote</span>
+                                        )}
+                                    </div>
+                                )}
+                                {!epicNumber && (
+                                    <div className="mt-2">
+                                        <span className="text-xs text-yellow-400">⚠️ EPIC number not found. Please verify your voter ID first.</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -472,6 +744,11 @@ export default function Dashboard() {
                                     symbol={candidate.symbol}
                                     imageColor={getCardColor(index)}
                                     badgeIcon={getSymbolIcon(candidate.symbol)}
+                                    symbolImagePath={getSymbolImagePath(
+                                        candidate.party_name, 
+                                        candidate.symbol,
+                                        candidate.is_women_reserved
+                                    )}
                                     onVote={() => openVoteModal(candidate)}
                                 />
                             ))}
@@ -532,26 +809,40 @@ function CandidateCard({
     symbol,
     imageColor,
     badgeIcon,
+    symbolImagePath,
     onVote,
+    disabled = false,
 }: {
     name: string
     party: string
     symbol: string
     imageColor: string
     badgeIcon: string
+    symbolImagePath?: string | null
     onVote?: () => void
+    disabled?: boolean
 }) {
+    const [imageError, setImageError] = useState(false)
+
     return (
         <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 flex flex-col items-center text-center hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden h-full justify-between">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
             <div className="flex flex-col items-center w-full">
-                <div className={`w-24 h-24 rounded-full ${imageColor} mb-4 flex items-center justify-center relative group-hover:scale-105 transition-transform`}>
-                    <span className="text-4xl text-white opacity-80">👤</span>
-                    {/* Party Badge */}
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center shadow-lg">
-                        <span className="text-sm">{badgeIcon}</span>
-                    </div>
+                <div className={`w-24 h-24 rounded-full ${imageColor} mb-4 flex items-center justify-center relative group-hover:scale-105 transition-transform overflow-hidden`}>
+                    {/* Party Symbol - Shows image if available, otherwise emoji */}
+                    {symbolImagePath && !imageError ? (
+                        <Image
+                            src={symbolImagePath}
+                            alt={symbol}
+                            width={96}
+                            height={96}
+                            className="object-cover w-full h-full"
+                            onError={() => setImageError(true)}
+                        />
+                    ) : (
+                        <span className="text-4xl text-white opacity-80">{badgeIcon}</span>
+                    )}
                 </div>
 
                 <h3 className="text-xl font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{name}</h3>
@@ -561,12 +852,19 @@ function CandidateCard({
 
             <button
                 onClick={onVote}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-900/20"
+                disabled={disabled}
+                className={`w-full py-3 rounded-lg text-white font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                    disabled 
+                        ? 'bg-gray-600 cursor-not-allowed opacity-50' 
+                        : 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/20'
+                }`}
             >
-                Cast Vote
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                {disabled ? 'Cannot Vote' : 'Cast Vote'}
+                {!disabled && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                )}
             </button>
         </div>
     )

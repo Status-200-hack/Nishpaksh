@@ -1,6 +1,6 @@
 # Voter ID Checker - Next.js Application
 
-A modern web application to check voter details from the Election Commission of India.
+A modern web application to check voter details from the Election Commission of India with blockchain-based voting system.
 
 ## Features
 
@@ -9,6 +9,9 @@ A modern web application to check voter details from the Election Commission of 
 - 📱 Mobile-friendly design
 - ⚡ Fast Next.js API routes
 - 🎯 Real-time voter data from ECI
+- ⛓️ Blockchain voting on Ethereum (Hardhat Local or Sepolia Testnet)
+- 🔐 EPIC-based unique voting (one vote per EPIC number)
+- 📊 Real-time results dashboard with charts
 
 ## Setup
 
@@ -39,6 +42,46 @@ npm run dev
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **API**: ECI Gateway API
+- **Blockchain**: Ethereum (Hardhat / Sepolia Testnet)
+- **Smart Contracts**: Solidity
+- **Web3**: Ethers.js v6
+- **Charts**: Recharts
+
+## Blockchain Setup
+
+### Option 1: Local Hardhat Network (Development)
+
+1. Start Hardhat node:
+```bash
+npm run chain
+```
+
+2. Deploy contract locally:
+```bash
+npm run deploy:local
+```
+
+3. Import test account to MetaMask (see `scripts/get-test-accounts.js`)
+
+### Option 2: Sepolia Testnet (Production-like)
+
+1. Get Sepolia ETH from faucets:
+   - https://sepoliafaucet.com/
+   - https://www.infura.io/faucet/sepolia
+
+2. Configure `.env.local`:
+```bash
+SEPOLIA_RPC_URL=https://rpc.sepolia.org
+PRIVATE_KEY=your_private_key_here
+NEXT_PUBLIC_VOTING_CHAIN_ID=11155111
+```
+
+3. Deploy to Sepolia:
+```bash
+npm run deploy:sepolia
+```
+
+**See [SEPOLIA_SETUP.md](./SEPOLIA_SETUP.md) for detailed Sepolia setup guide.**
 
 ## API Endpoints
 

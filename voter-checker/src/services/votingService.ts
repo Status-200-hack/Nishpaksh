@@ -14,10 +14,25 @@ const EXPECTED_CHAIN_ID = BigInt(
   process.env.NEXT_PUBLIC_VOTING_CHAIN_ID ?? '31337'
 )
 
+// Sepolia network configuration
+const SEPOLIA_CHAIN_ID = BigInt(11155111)
+const SEPOLIA_NETWORK_CONFIG = {
+  chainId: '0xaa36a7', // 11155111 in hex
+  chainName: 'Sepolia',
+  nativeCurrency: {
+    name: 'ETH',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: ['https://rpc.sepolia.org'],
+  blockExplorerUrls: ['https://sepolia.etherscan.io'],
+}
+
 // Minimal ABI needed for the plan
 const VOTING_ABI = [
-  'function vote(uint256 _candidateId, uint256 _wardId) external',
-  'event VoteCasted(address indexed voter, uint256 candidateId, uint256 wardId)',
+  'function vote(uint256 _epicHash, uint256 _candidateId, uint256 _wardId) external',
+  'function hasVotedByEpic(uint256) view returns (bool)',
+  'event VoteCasted(address indexed voter, uint256 epicHash, uint256 candidateId, uint256 wardId)',
 ]
 
 function isUuidLike(value: string) {
@@ -46,7 +61,17 @@ function toUint256(value: string | number | bigint): bigint {
   throw new Error(`Candidate id "${s}" is not a uint or UUID`)
 }
 
+// Hash EPIC number to uint256 for storage in contract
+function hashEpicNumber(epicNumber: string): bigint {
+  // Use keccak256 hash of EPIC number (uppercase, trimmed)
+  const normalizedEpic = epicNumber.toUpperCase().trim()
+  const hash = ethers.keccak256(ethers.toUtf8Bytes(normalizedEpic))
+  // Convert hex string directly to BigInt (ethers.keccak256 returns hex with 0x prefix)
+  return BigInt(hash)
+}
+
 export async function castVote(params: {
+  epicNumber: string
   candidateId: string | number | bigint
   wardId: string | number | bigint
 }) {
@@ -68,20 +93,62 @@ export async function castVote(params: {
   const provider = new ethers.BrowserProvider(window.ethereum)
   await provider.send('eth_requestAccounts', [])
 
-  // Safety: make sure the wallet is on the expected chain (default: local hardhat 31337)
+  // Safety: make sure the wallet is on the expected chain
   try {
     const net = await provider.getNetwork()
     if (net.chainId !== EXPECTED_CHAIN_ID) {
       const hexChainId = '0x' + EXPECTED_CHAIN_ID.toString(16)
+      
+      // Determine network configuration based on chain ID
+      const isSepolia = EXPECTED_CHAIN_ID === SEPOLIA_CHAIN_ID
+      const networkConfig = isSepolia 
+        ? SEPOLIA_NETWORK_CONFIG
+        : {
+            chainId: hexChainId,
+            chainName: 'Hardhat Local',
+            nativeCurrency: {
+              name: 'ETH',
+              symbol: 'ETH',
+              decimals: 18,
+            },
+            rpcUrls: ['http://127.0.0.1:8545'],
+            blockExplorerUrls: null,
+          }
+      
       try {
+        // Try to switch to the network
         await window.ethereum.request({
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: hexChainId }],
         })
       } catch (switchErr: any) {
-        throw new Error(
-          `Wrong network. Switch MetaMask to chainId=${EXPECTED_CHAIN_ID.toString()} (Localhost 8545) and try again.`
-        )
+        // If the network doesn't exist (error code 4902), add it
+        if (switchErr.code === 4902 || switchErr.message?.includes('does not exist')) {
+          try {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [networkConfig],
+            })
+            // After adding, try switching again
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: hexChainId }],
+            })
+          } catch (addErr: any) {
+            const networkName = isSepolia ? 'Sepolia' : 'Hardhat Local'
+            const rpcUrl = isSepolia ? 'https://rpc.sepolia.org' : 'http://127.0.0.1:8545'
+            throw new Error(
+              `Failed to add ${networkName} network. Please manually add it to MetaMask:\n` +
+              `Chain ID: ${EXPECTED_CHAIN_ID.toString()}\n` +
+              `RPC URL: ${rpcUrl}`
+            )
+          }
+        } else {
+          const networkName = isSepolia ? 'Sepolia' : 'Hardhat Local'
+          throw new Error(
+            `Wrong network. Switch MetaMask to ${networkName} (Chain ID: ${EXPECTED_CHAIN_ID.toString()}) and try again.`
+          )
+        }
       }
     }
   } catch (e: any) {
@@ -92,16 +159,232 @@ export async function castVote(params: {
   }
 
   const signer = await provider.getSigner()
+  
+  // Verify signer has an account
+  const signerAddress = await signer.getAddress()
+  console.log('Signer address:', signerAddress)
+  
+  // Check balance
+  const balance = await provider.getBalance(signerAddress)
+  console.log('Signer balance:', ethers.formatEther(balance), 'ETH')
+  
+  if (balance === BigInt(0)) {
+    throw new Error('Your MetaMask account has no ETH. Please import a funded test account.\nRun: node scripts/get-test-accounts.js')
+  }
 
   const contractAddress = ethers.getAddress(VOTING_CONTRACT_ADDRESS)
   const contract = new ethers.Contract(contractAddress, VOTING_ABI, signer)
 
+  // Hash EPIC number and check if already voted
+  const epicHash = hashEpicNumber(params.epicNumber)
+  console.log('EPIC hash:', epicHash.toString())
+  
+  // Check if this EPIC has already voted (with error handling for old contracts)
+  try {
+    const hasVoted = await contract.hasVotedByEpic(epicHash)
+    console.log('Has voted check result:', hasVoted)
+    if (hasVoted) {
+      throw new Error('This EPIC number has already voted. Each voter can only vote once.')
+    }
+  } catch (checkError: any) {
+    // If the function doesn't exist (old contract), log warning but continue
+    if (checkError.message?.includes('could not decode') || checkError.message?.includes('function does not exist')) {
+      console.warn('Contract may not be updated. Proceeding with vote...')
+    } else {
+      // Re-throw if it's a real "already voted" error
+      throw checkError
+    }
+  }
+
   const candidateId = toUint256(params.candidateId)
   const wardId = toUint256(params.wardId)
+  console.log('Vote parameters:', {
+    epicHash: epicHash.toString(),
+    candidateId: candidateId.toString(),
+    wardId: wardId.toString(),
+    contractAddress,
+  })
+  
+  // Validate parameters
+  if (epicHash === BigInt(0)) {
+    throw new Error('Invalid EPIC number hash')
+  }
+  if (candidateId === BigInt(0)) {
+    throw new Error('Invalid candidate ID')
+  }
+  if (wardId === BigInt(0)) {
+    throw new Error('Invalid ward ID')
+  }
 
-  const tx = await contract.vote(candidateId, wardId)
-  const receipt = await tx.wait()
+  // Try new signature first (with epicHash)
+  try {
+    // Estimate gas first to validate the call and get proper gas limit
+    let gasEstimate
+    try {
+      gasEstimate = await contract.vote.estimateGas(epicHash, candidateId, wardId)
+      console.log('Gas estimate:', gasEstimate.toString())
+    } catch (estimateError: any) {
+      // If estimation fails, check the reason
+      const estimateMsg = estimateError.reason || estimateError.message || String(estimateError)
+      if (estimateMsg.includes('already voted')) {
+        throw new Error('This EPIC number has already voted. Each voter can only vote once.')
+      }
+      if (estimateMsg.includes('Invalid')) {
+        throw new Error('Invalid vote parameters. Please check your selection and try again.')
+      }
+      // If estimation fails for other reasons, use a default gas limit
+      console.warn('Gas estimation failed, using default:', estimateMsg)
+      gasEstimate = BigInt(500000)
+    }
+    
+    // Call the vote function with explicit gas limit
+    const tx = await contract.vote(epicHash, candidateId, wardId, {
+      gasLimit: gasEstimate + BigInt(50000), // Add buffer to gas estimate
+    })
+    const receipt = await tx.wait()
+    return { txHash: tx.hash as string, receipt }
+  } catch (voteError: any) {
+    // Log full error for debugging
+    console.error('Vote error details:', {
+      error: voteError,
+      code: voteError.code,
+      reason: voteError.reason,
+      message: voteError.message,
+      data: voteError.data,
+      action: voteError.action,
+    })
+    
+    // Handle specific error cases with better messages
+    const errorMessage = voteError.reason || voteError.message || String(voteError)
+    const errorCode = voteError.code
+    
+    // Check for user rejection (MetaMask user clicked reject)
+    if (errorCode === 4001 || 
+        errorCode === 'ACTION_REJECTED' ||
+        errorMessage.includes('user rejected') ||
+        errorMessage.includes('User rejected') ||
+        errorMessage.includes('User denied') ||
+        errorMessage.toLowerCase().includes('rejected')) {
+      throw new Error('Transaction was rejected. Please click "Confirm" in MetaMask to approve the transaction.')
+    }
+    
+    // Check for "already voted" errors
+    if (errorMessage.includes('already voted') || 
+        errorMessage.includes('has already voted') ||
+        errorMessage.includes('This EPIC number has already voted')) {
+      throw new Error('This EPIC number has already voted. Each voter can only vote once.')
+    }
+    
+    // Check for invalid candidate errors
+    if (errorMessage.includes('Invalid candidate') || errorMessage.includes('Invalid EPIC')) {
+      throw new Error('Invalid vote parameters. Please check your selection and try again.')
+    }
+    
+    // Check for insufficient funds
+    if (errorMessage.includes('insufficient funds') || 
+        errorMessage.includes('insufficient balance') ||
+        errorCode === 'INSUFFICIENT_FUNDS') {
+      throw new Error('Insufficient ETH for gas. Please add ETH to your MetaMask account.')
+    }
+    
+    // Check for network errors
+    if (errorMessage.includes('network') || 
+        errorMessage.includes('chain') ||
+        errorMessage.includes('network mismatch') ||
+        errorCode === 'NETWORK_ERROR') {
+      throw new Error('Network error. Please ensure MetaMask is connected to Hardhat Local network (Chain ID: 31337).')
+    }
+    
+    // Check for contract mismatch errors
+    if (errorMessage.includes('could not decode') || 
+        errorMessage.includes('execution reverted') ||
+        errorCode === 'CALL_EXCEPTION' ||
+        errorCode === 'BAD_DATA') {
+      // Check if it's a revert reason
+      if (voteError.data) {
+        try {
+          const revertReason = contract.interface.parseError(voteError.data)
+          throw new Error(`Transaction failed: ${revertReason?.name || 'Unknown error'}`)
+        } catch {
+          throw new Error(
+            'Contract error. Please ensure:\n' +
+            '1. Contract is deployed: npm run deploy:local\n' +
+            '2. You are on the correct network (Hardhat Local)\n' +
+            '3. Contract address is correct in .env.local'
+          )
+        }
+      }
+      throw new Error(
+        'Contract error. Please ensure the contract is deployed correctly.\n' +
+        'Run: npm run deploy:local'
+      )
+    }
+    
+    // Handle MetaMask specific errors
+    if (errorMessage.includes('coalesce') || 
+        errorMessage.includes('invalid transaction') ||
+        errorCode === 'INVALID_ARGUMENT') {
+      throw new Error(
+        'Transaction format error. Please check:\n' +
+        '1. MetaMask is connected\n' +
+        '2. Network is Hardhat Local (Chain ID: 31337)\n' +
+        '3. You have ETH for gas fees'
+      )
+    }
+    
+    // Handle gas estimation errors
+    if (errorMessage.includes('gas') || errorCode === 'UNPREDICTABLE_GAS_LIMIT') {
+      throw new Error(
+        'Gas estimation failed. This might mean:\n' +
+        '1. The transaction would fail (check if EPIC already voted)\n' +
+        '2. Network connection issue\n' +
+        '3. Contract not deployed correctly'
+      )
+    }
+    
+    // Generic error fallback with more context
+    const detailedError = errorMessage || 'Unknown error occurred'
+    throw new Error(`Vote failed: ${detailedError}\n\nPlease check:\n1. MetaMask is connected and unlocked\n2. You are on Hardhat Local network\n3. You have ETH for gas\n4. Contract is deployed`)
+  }
+}
 
-  return { txHash: tx.hash as string, receipt }
+// Check if an EPIC number has already voted
+export async function checkEpicVotedStatus(epicNumber: string): Promise<boolean> {
+  if (typeof window === 'undefined') {
+    throw new Error('This function can only be called in the browser')
+  }
+  if (!window.ethereum) {
+    throw new Error('MetaMask not found')
+  }
+  if (
+    !VOTING_CONTRACT_ADDRESS ||
+    VOTING_CONTRACT_ADDRESS === '0x0000000000000000000000000000000000000000'
+  ) {
+    return false
+  }
+
+  const provider = new ethers.BrowserProvider(window.ethereum)
+  const network = await provider.getNetwork()
+  
+  if (network.chainId !== EXPECTED_CHAIN_ID) {
+    return false
+  }
+
+  const contractAddress = ethers.getAddress(VOTING_CONTRACT_ADDRESS)
+  const contract = new ethers.Contract(contractAddress, VOTING_ABI, provider)
+
+  const epicHash = hashEpicNumber(epicNumber)
+  
+  try {
+    const hasVoted = await contract.hasVotedByEpic(epicHash)
+    return hasVoted
+  } catch (error: any) {
+    // If function doesn't exist (old contract), return false
+    if (error.message?.includes('could not decode') || error.message?.includes('function does not exist')) {
+      console.warn('Contract may not support EPIC-based voting yet')
+      return false
+    }
+    throw error
+  }
 }
 
