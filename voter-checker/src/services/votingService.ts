@@ -179,6 +179,40 @@ export async function castVote(params: {
   const epicHash = hashEpicNumber(params.epicNumber)
   console.log('EPIC hash:', epicHash.toString())
   
+  // Store EPIC hash -> voter data mapping for results aggregation
+  if (typeof window !== 'undefined') {
+    try {
+      const epicUpper = params.epicNumber.toUpperCase()
+      // Get stored voter data
+      const voterDataStr = localStorage.getItem(`voterData_${epicUpper}`) || localStorage.getItem('voterData')
+      if (voterDataStr) {
+        const voterData = JSON.parse(voterDataStr)
+        const epicHashStr = epicHash.toString()
+        
+        // Store mapping by EPIC hash
+        const existingMappings = localStorage.getItem('epicHashMappings')
+        const mappings = existingMappings ? JSON.parse(existingMappings) : {}
+        
+        const epicHashHex = '0x' + epicHash.toString(16).padStart(64, '0')
+        if (!mappings[epicHashHex] && !mappings[epicHashStr]) {
+          const mapping = {
+            epicHash: epicHashHex, // Store as hex string
+            epicHashBigInt: epicHashStr, // Also store as decimal string
+            epicNumber: epicUpper,
+            gender: voterData.gender || voterData.Gender || null,
+            age: voterData.age || voterData.Age || null,
+            fullData: voterData,
+          }
+          mappings[epicHashHex] = mapping
+          mappings[epicHashStr] = mapping // Store by both keys for flexible matching
+          localStorage.setItem('epicHashMappings', JSON.stringify(mappings))
+        }
+      }
+    } catch (error) {
+      console.error('Error storing EPIC hash mapping:', error)
+    }
+  }
+  
   // Check if this EPIC has already voted (with error handling for old contracts)
   try {
     const hasVoted = await contract.hasVotedByEpic(epicHash)

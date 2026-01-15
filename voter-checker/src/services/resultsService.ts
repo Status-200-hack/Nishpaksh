@@ -295,7 +295,7 @@ export async function getPartyVoteData(): Promise<PartyVoteData[]> {
   return partyData
 }
 
-// Get gender distribution from stored voter data
+// Get gender distribution from stored voter data linked to blockchain votes
 export async function getGenderDistribution(): Promise<GenderDistribution> {
   const provider = await getProvider()
   const contract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, provider)
@@ -308,15 +308,46 @@ export async function getGenderDistribution(): Promise<GenderDistribution> {
   let female = 0
   let other = 0
   
-  // Get aggregated demographics from localStorage
+  // Get EPIC hash mappings from localStorage
   if (typeof window !== 'undefined') {
     try {
-      const storedDemographics = localStorage.getItem('voterDemographics')
-      if (storedDemographics) {
-        const demographics = JSON.parse(storedDemographics)
-        male = demographics.male || 0
-        female = demographics.female || 0
-        other = demographics.other || 0
+      const mappingsStr = localStorage.getItem('epicHashMappings')
+      const mappings = mappingsStr ? JSON.parse(mappingsStr) : {}
+      
+      // Match each vote event with stored voter data
+      events.forEach((event) => {
+        const eventLog = event as ethers.EventLog
+        const epicHashBigInt = eventLog.args[1] as bigint
+        const epicHashHex = '0x' + epicHashBigInt.toString(16).padStart(64, '0')
+        const epicHashStr = epicHashBigInt.toString()
+        
+        // Try to find voter data by EPIC hash (try both hex and decimal string)
+        const voterData = mappings[epicHashHex] || mappings[epicHashStr] || 
+                         Object.values(mappings).find((m: any) => 
+                           m.epicHash === epicHashHex || m.epicHash === epicHashStr
+                         )
+        
+        if (voterData && voterData.gender) {
+          const gender = String(voterData.gender).toUpperCase()
+          if (gender === 'M' || gender === 'MALE') {
+            male++
+          } else if (gender === 'F' || gender === 'FEMALE') {
+            female++
+          } else {
+            other++
+          }
+        }
+      })
+      
+      // Fallback: if no matches found, use aggregated demographics
+      if (male === 0 && female === 0 && other === 0) {
+        const storedDemographics = localStorage.getItem('voterDemographics')
+        if (storedDemographics) {
+          const demographics = JSON.parse(storedDemographics)
+          male = demographics.male || 0
+          female = demographics.female || 0
+          other = demographics.other || 0
+        }
       }
     } catch (error) {
       console.error('Error reading voter demographics:', error)
@@ -330,7 +361,7 @@ export async function getGenderDistribution(): Promise<GenderDistribution> {
   }
 }
 
-// Get age distribution from stored voter data
+// Get age distribution from stored voter data linked to blockchain votes
 export async function getAgeDistribution(): Promise<AgeDistribution[]> {
   const provider = await getProvider()
   const contract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, provider)
@@ -349,23 +380,56 @@ export async function getAgeDistribution(): Promise<AgeDistribution[]> {
     { ageRange: '65+', count: 0 },
   ]
   
-  // Get age data from localStorage
+  // Get EPIC hash mappings from localStorage
   if (typeof window !== 'undefined') {
     try {
-      const storedDemographics = localStorage.getItem('voterDemographics')
-      if (storedDemographics) {
-        const demographics = JSON.parse(storedDemographics)
-        const ages = demographics.ages || []
+      const mappingsStr = localStorage.getItem('epicHashMappings')
+      const mappings = mappingsStr ? JSON.parse(mappingsStr) : {}
+      
+      // Match each vote event with stored voter data
+      events.forEach((event) => {
+        const eventLog = event as ethers.EventLog
+        const epicHashBigInt = eventLog.args[1] as bigint
+        const epicHashHex = '0x' + epicHashBigInt.toString(16).padStart(64, '0')
+        const epicHashStr = epicHashBigInt.toString()
         
-        // Count ages into ranges
-        ages.forEach((age: number) => {
-          if (age >= 18 && age <= 25) ageRanges[0].count++
-          else if (age >= 26 && age <= 35) ageRanges[1].count++
-          else if (age >= 36 && age <= 45) ageRanges[2].count++
-          else if (age >= 46 && age <= 55) ageRanges[3].count++
-          else if (age >= 56 && age <= 65) ageRanges[4].count++
-          else if (age > 65) ageRanges[5].count++
-        })
+        // Try to find voter data by EPIC hash (try both hex and decimal string)
+        const voterData = mappings[epicHashHex] || mappings[epicHashStr] || 
+                         Object.values(mappings).find((m: any) => 
+                           m.epicHash === epicHashHex || m.epicHash === epicHashStr
+                         )
+        
+        if (voterData && voterData.age) {
+          const age = typeof voterData.age === 'string' ? parseInt(voterData.age) : voterData.age
+          if (!isNaN(age) && age > 0) {
+            if (age >= 18 && age <= 25) ageRanges[0].count++
+            else if (age >= 26 && age <= 35) ageRanges[1].count++
+            else if (age >= 36 && age <= 45) ageRanges[2].count++
+            else if (age >= 46 && age <= 55) ageRanges[3].count++
+            else if (age >= 56 && age <= 65) ageRanges[4].count++
+            else if (age > 65) ageRanges[5].count++
+          }
+        }
+      })
+      
+      // Fallback: if no matches found, use aggregated demographics
+      const totalCount = ageRanges.reduce((sum, range) => sum + range.count, 0)
+      if (totalCount === 0) {
+        const storedDemographics = localStorage.getItem('voterDemographics')
+        if (storedDemographics) {
+          const demographics = JSON.parse(storedDemographics)
+          const ages = demographics.ages || []
+          
+          // Count ages into ranges
+          ages.forEach((age: number) => {
+            if (age >= 18 && age <= 25) ageRanges[0].count++
+            else if (age >= 26 && age <= 35) ageRanges[1].count++
+            else if (age >= 36 && age <= 45) ageRanges[2].count++
+            else if (age >= 46 && age <= 55) ageRanges[3].count++
+            else if (age >= 56 && age <= 65) ageRanges[4].count++
+            else if (age > 65) ageRanges[5].count++
+          })
+        }
       }
     } catch (error) {
       console.error('Error reading age data:', error)

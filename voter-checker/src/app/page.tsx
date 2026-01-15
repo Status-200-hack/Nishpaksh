@@ -93,17 +93,43 @@ export default function Home() {
         setVoterData(data.data)
         // Store EPIC number and voter demographics in localStorage for voting
         if (typeof window !== 'undefined' && epicNumber) {
-          localStorage.setItem('voterEpicNumber', epicNumber.toUpperCase())
-          // Store voter data (gender, age) for results page
+          const epicUpper = epicNumber.toUpperCase()
+          localStorage.setItem('voterEpicNumber', epicUpper)
+          
+          // Store full raw API response for persistence
+          const fullVoterData = {
+            epicNumber: epicUpper,
+            ...data.data, // Store entire API response
+            timestamp: Date.now(), // Add timestamp for cache management
+          }
+          localStorage.setItem(`voterData_${epicUpper}`, JSON.stringify(fullVoterData))
+          
+          // Also store in a general voterData key for current session
           const voterData = {
-            epicNumber: epicNumber.toUpperCase(),
+            epicNumber: epicUpper,
             gender: data.data.gender || data.data.Gender || null,
             age: data.data.age || data.data.Age || null,
           }
           localStorage.setItem('voterData', JSON.stringify(voterData))
           
-          // Also update aggregated demographics
-          updateVoterDemographics(voterData.gender, voterData.age)
+          // Create EPIC hash mapping for vote tracking
+          const { ethers } = await import('ethers')
+          const epicHash = ethers.keccak256(ethers.toUtf8Bytes(epicUpper))
+          const epicHashMapping = {
+            epicHash: epicHash, // Store as hex string
+            epicHashBigInt: BigInt(epicHash).toString(), // Also store as decimal string for matching
+            epicNumber: epicUpper,
+            gender: voterData.gender,
+            age: voterData.age,
+            fullData: data.data,
+          }
+          
+          // Store mapping by EPIC hash (both hex and decimal for flexible matching)
+          const existingMappings = localStorage.getItem('epicHashMappings')
+          const mappings = existingMappings ? JSON.parse(existingMappings) : {}
+          mappings[epicHash] = epicHashMapping
+          mappings[BigInt(epicHash).toString()] = epicHashMapping // Also store by decimal string
+          localStorage.setItem('epicHashMappings', JSON.stringify(mappings))
         }
       } else {
         setError(data.message || 'No voter details found')
