@@ -29,10 +29,14 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
     if (result && result.verified && webcamMode === 'verify') {
       setTimeout(() => {
         let url = '/dashboard'
-        if ((data as any)?.part_lat_long) {
-          const coords = (data as any).part_lat_long
-          url += `?latlong=${encodeURIComponent(coords)}`
-        }
+        // ECI response typically uses `partLatLong` (camelCase), but keep fallbacks for older shapes.
+        const coords =
+          (data as any)?.partLatLong ??
+          (data as any)?.part_lat_long ??
+          (data as any)?.latLong ??
+          (data as any)?.partLatlong
+
+        if (coords) url += `?latlong=${encodeURIComponent(String(coords))}`
         router.push(url)
       }, 1500)
     }

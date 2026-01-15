@@ -1,0 +1,41 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\Lenovo\\OneDrive\\Desktop\\final-gdg\\Nishpaksh\\voter-checker\\contracts\\ElectionVoting.sol": {
+      "lastModificationDate": 1768479854114,
+      "contentHash": "fc67fac288665e84e822dc294f699862",
+      "sourceName": "contracts/ElectionVoting.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ElectionVoting"
+      ]
+    }
+  }
+}

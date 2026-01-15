@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { castVote } from '@/services/votingService'
 
 interface Candidate {
     id: string
@@ -11,10 +13,17 @@ interface Candidate {
 }
 
 export default function Dashboard() {
+    const router = useRouter()
     const [account, setAccount] = useState<string | null>(null)
     const [candidates, setCandidates] = useState<Candidate[]>([])
     const [loading, setLoading] = useState(true)
-    const [wardName, setWardName] = useState("Bandra - 100")
+    const [wardName, setWardName] = useState("Detecting ward...")
+    const [wardNoState, setWardNoState] = useState<number | null>(null)
+
+    const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
+    const [voteStep, setVoteStep] = useState<'idle' | 'confirm' | 'mining' | 'success' | 'error'>('idle')
+    const [txHash, setTxHash] = useState<string | null>(null)
+    const [voteError, setVoteError] = useState<string | null>(null)
 
     useEffect(() => {
         const getAccount = async () => {
@@ -33,7 +42,31 @@ export default function Dashboard() {
         const detectWardAndFetch = async () => {
             setLoading(true)
             let wardNo = 100 // Default fallback
-            let detectedWardName = "Ward"
+
+            const extractTwoNumbers = (value: string): [number, number] | null => {
+                // Accept any string that contains at least two numbers.
+                // Examples:
+                // - "19.07,72.87"
+                // - "72.87 - 19.07"
+                // - "lat: 19.07 lng: 72.87"
+                const nums = (value.match(/-?\d+(?:\.\d+)?/g) || [])
+                    .map(n => Number(n))
+                    .filter(n => Number.isFinite(n))
+                if (nums.length < 2) return null
+                return [nums[0], nums[1]]
+            }
+
+            const getOuterRings = (geometry: any): number[][][] => {
+                // Returns a list of rings (each ring is an array of [lng,lat] points)
+                if (!geometry) return []
+                if (geometry.type === 'Polygon' && Array.isArray(geometry.coordinates)) {
+                    return [geometry.coordinates[0]]
+                }
+                if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
+                    return geometry.coordinates.map((poly: any) => poly?.[0]).filter(Boolean)
+                }
+                return []
+            }
 
             // 1. Get Lat/Long from URL
             const searchParams = new URLSearchParams(window.location.search)
@@ -41,24 +74,68 @@ export default function Dashboard() {
 
             if (latlong) {
                 try {
-                    const [latStr, longStr] = latlong.split(',')
-                    const lat = parseFloat(latStr.trim())
-                    const long = parseFloat(longStr.trim())
+                    const two = extractTwoNumbers(latlong)
+                    if (!two) throw new Error(`Invalid latlong param: "${latlong}"`)
+                    const [a, b] = two
 
                     // 2. Fetch GeoJSON
-                    const geoRes = await fetch('/ward-data.geojson')
+                    const geoRes = await fetch('/api/ward-data', { cache: 'no-store' })
                     if (geoRes.ok) {
                         const geoData = await geoRes.json()
+
+                        const findWardForPoint = (lng: number, lat: number): number | null => {
+                            let detectedWard: number | null = null
+                            for (const feature of geoData.features) {
+                                const rings = getOuterRings(feature?.geometry)
+                                for (const ring of rings) {
+                                    // GeoJSON points are [lng,lat]
+                                    if (Array.isArray(ring) && ring.length > 2 && isPointInPolygon([lng, lat], ring)) {
+                                        const noteRaw = feature?.properties?.note
+                                        const note = parseInt(String(noteRaw), 10)
+                                        if (Number.isFinite(note)) {
+                                            detectedWard = note
+                                        } else {
+                                            console.warn("Ward detected but note is not a number:", noteRaw)
+                                        }
+                                        break
+                                    }
+                                }
+                                if (detectedWard !== null) break
+                            }
+                            return detectedWard
+                        }
+
                         // 3. Find Ward (Point in Polygon)
-                        for (const feature of geoData.features) {
-                            if (isPointInPolygon([long, lat], feature.geometry.coordinates[0][0])) {
-                                // Extract numeric part from "note": "100" or similar
-                                // "note" seems to be just the number like "9" based on the file view
-                                wardNo = parseInt(feature.properties.note)
-                                console.log("Detected Ward:", wardNo)
+                        // IMPORTANT: We do NOT assume lat/lng order from the string because for India,
+                        // longitudes (~72–77) are NOT > 90, so simple heuristics fail. Instead, try both.
+                        const attempts = [
+                            { lng: a, lat: b, label: 'as [lng,lat]' },
+                            { lng: b, lat: a, label: 'swapped [lng,lat]' },
+                        ]
+
+                        let detectedWard: number | null = null
+                        let chosenAttempt: string | null = null
+                        for (const attempt of attempts) {
+                            const w = findWardForPoint(attempt.lng, attempt.lat)
+                            if (w !== null) {
+                                detectedWard = w
+                                chosenAttempt = attempt.label
                                 break
                             }
                         }
+
+                        if (detectedWard !== null) {
+                            wardNo = detectedWard
+                            console.log("Detected Ward:", detectedWard, "using", chosenAttempt, "from latlong:", latlong)
+                        } else {
+                            console.warn("No ward match found for point (tried both orders):", {
+                                latlong,
+                                attempt1: { lng: attempts[0].lng, lat: attempts[0].lat },
+                                attempt2: { lng: attempts[1].lng, lat: attempts[1].lat },
+                            })
+                        }
+                    } else {
+                        console.error("Failed to load ward geojson:", geoRes.status)
                     }
                 } catch (e) {
                     console.error("Error detecting ward:", e)
@@ -66,6 +143,7 @@ export default function Dashboard() {
             }
 
             setWardName(`Ward ${wardNo}`)
+            setWardNoState(wardNo)
 
             // 4. Fetch Candidates for Ward
             try {
@@ -92,6 +170,47 @@ export default function Dashboard() {
         getAccount()
         detectWardAndFetch()
     }, [])
+
+    const closeVoteModal = () => {
+        if (voteStep === 'mining') return
+        setSelectedCandidate(null)
+        setVoteStep('idle')
+        setVoteError(null)
+        setTxHash(null)
+    }
+
+    const openVoteModal = (candidate: Candidate) => {
+        setSelectedCandidate(candidate)
+        setVoteStep('confirm')
+        setVoteError(null)
+        setTxHash(null)
+    }
+
+    const confirmAndSignVote = async () => {
+        if (!selectedCandidate) return
+        if (!wardNoState) {
+            setVoteStep('error')
+            setVoteError('Ward not detected yet. Please refresh and try again.')
+            return
+        }
+
+        setVoteStep('mining')
+        setVoteError(null)
+        setTxHash(null)
+
+        try {
+            const { txHash } = await castVote({
+                candidateId: selectedCandidate.id,
+                wardId: wardNoState,
+            })
+            setTxHash(txHash)
+            setVoteStep('success')
+        } catch (e: any) {
+            const msg = e?.shortMessage || e?.message || 'Vote failed'
+            setVoteError(msg)
+            setVoteStep('error')
+        }
+    }
 
     // Ray Casting Algorithm
     const isPointInPolygon = (point: number[], vs: number[][]) => {
@@ -125,6 +244,123 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-gray-900 text-white flex font-sans">
+            {/* Vote Confirmation / Status Modal */}
+            {selectedCandidate && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+                    <div className="absolute inset-0 bg-black/70" onClick={closeVoteModal} />
+                    <div className="relative w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">
+                                    {voteStep === 'confirm' && 'Confirm your vote'}
+                                    {voteStep === 'mining' && 'Confirming on Blockchain...'}
+                                    {voteStep === 'success' && 'Vote Casted!'}
+                                    {voteStep === 'error' && 'Vote failed'}
+                                </h2>
+                                <p className="text-sm text-gray-400 mt-1">
+                                    Ward: <span className="text-gray-200 font-semibold">{wardNoState ?? '...'}</span>
+                                </p>
+                            </div>
+                            <button
+                                className="text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                onClick={closeVoteModal}
+                                disabled={voteStep === 'mining'}
+                                aria-label="Close"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-white font-semibold">{selectedCandidate.candidate_name}</div>
+                                    <div className="text-sm text-blue-400">{selectedCandidate.party_name}</div>
+                                    <div className="text-xs text-gray-500 mt-1">Symbol: {selectedCandidate.symbol}</div>
+                                </div>
+                                <div className="text-3xl">{getSymbolIcon(selectedCandidate.symbol)}</div>
+                            </div>
+                        </div>
+
+                        {voteStep === 'confirm' && (
+                            <div className="text-sm text-gray-400 mb-4">
+                                Clicking <span className="text-white font-semibold">Confirm & Sign</span> will open MetaMask to sign and pay gas.
+                            </div>
+                        )}
+
+                        {voteStep === 'mining' && (
+                            <div className="flex items-center gap-3 text-sm text-gray-300 mb-4">
+                                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                Waiting for transaction confirmation...
+                            </div>
+                        )}
+
+                        {voteStep === 'success' && txHash && (
+                            <div className="text-sm text-gray-300 mb-4">
+                                <div className="text-green-400 font-semibold mb-1">Transaction confirmed</div>
+                                <div className="font-mono break-all bg-gray-950/40 border border-gray-800 rounded-lg p-3">
+                                    {txHash}
+                                </div>
+                            </div>
+                        )}
+
+                        {voteStep === 'error' && voteError && (
+                            <div className="text-sm text-red-300 mb-4 bg-red-950/30 border border-red-900/40 rounded-lg p-3">
+                                {voteError}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 justify-end">
+                            {voteStep === 'confirm' && (
+                                <>
+                                    <button
+                                        className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
+                                        onClick={closeVoteModal}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+                                        onClick={confirmAndSignVote}
+                                    >
+                                        Confirm & Sign
+                                    </button>
+                                </>
+                            )}
+
+                            {voteStep === 'mining' && (
+                                <button
+                                    className="px-4 py-2 rounded-lg bg-blue-600/60 text-white font-semibold cursor-not-allowed"
+                                    disabled
+                                >
+                                    Confirming...
+                                </button>
+                            )}
+
+                            {voteStep === 'success' && (
+                                <button
+                                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+                                    onClick={() => router.push(`/results${txHash ? `?tx=${encodeURIComponent(txHash)}` : ''}`)}
+                                >
+                                    View Results
+                                </button>
+                            )}
+
+                            {voteStep === 'error' && (
+                                <button
+                                    className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
+                                    onClick={() => setVoteStep('confirm')}
+                                >
+                                    Back
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Sidebar */}
             <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col hidden md:flex">
                 <div className="p-6 flex items-center gap-3">
@@ -236,6 +472,7 @@ export default function Dashboard() {
                                     symbol={candidate.symbol}
                                     imageColor={getCardColor(index)}
                                     badgeIcon={getSymbolIcon(candidate.symbol)}
+                                    onVote={() => openVoteModal(candidate)}
                                 />
                             ))}
 
@@ -289,7 +526,21 @@ export default function Dashboard() {
     )
 }
 
-function CandidateCard({ name, party, symbol, imageColor, badgeIcon }: { name: string, party: string, symbol: string, imageColor: string, badgeIcon: string }) {
+function CandidateCard({
+    name,
+    party,
+    symbol,
+    imageColor,
+    badgeIcon,
+    onVote,
+}: {
+    name: string
+    party: string
+    symbol: string
+    imageColor: string
+    badgeIcon: string
+    onVote?: () => void
+}) {
     return (
         <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 flex flex-col items-center text-center hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden h-full justify-between">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -308,7 +559,10 @@ function CandidateCard({ name, party, symbol, imageColor, badgeIcon }: { name: s
                 <p className="text-gray-500 text-xs italic mb-6">Symbol: {symbol}</p>
             </div>
 
-            <button className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-900/20">
+            <button
+                onClick={onVote}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-900/20"
+            >
                 Cast Vote
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
