@@ -27,7 +27,7 @@ from deepface import DeepFace
 MODEL_NAME = "ArcFace"
 DETECTOR_BACKEND = "retinaface"
 DISTANCE_METRIC = "cosine"  # For documentation; we compute cosine similarity ourselves
-SIMILARITY_THRESHOLD = 0.68  # similarity >= 0.68 → VERIFIED
+SIMILARITY_THRESHOLD = 0.50  # similarity >= 0.68 → VERIFIED
 
 
 class FaceEmbedder:

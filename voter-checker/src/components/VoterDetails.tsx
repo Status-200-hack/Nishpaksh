@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import WebcamCapture from './WebcamCapture'
 
 interface VoterDetailsProps {
@@ -8,6 +9,7 @@ interface VoterDetailsProps {
 }
 
 export default function VoterDetails({ data }: VoterDetailsProps) {
+  const router = useRouter()
   const [faceResult, setFaceResult] = useState<any>(null)
   const [faceError, setFaceError] = useState<string | null>(null)
   const [showWebcam, setShowWebcam] = useState(false)
@@ -22,6 +24,18 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
     setFaceResult(result)
     setFaceError(null)
     setShowWebcam(false)
+
+    // Redirect to dashboard on successful verification
+    if (result && result.verified && webcamMode === 'verify') {
+      setTimeout(() => {
+        let url = '/dashboard'
+        if ((data as any)?.part_lat_long) {
+          const coords = (data as any).part_lat_long
+          url += `?latlong=${encodeURIComponent(coords)}`
+        }
+        router.push(url)
+      }, 1500)
+    }
   }
 
   const handleFaceError = (error: string) => {
@@ -120,7 +134,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
           label="Section Number"
           value={data.sectionNo?.toString()}
         />
-        
+
         {/* Polling Station Details */}
         <div className="md:col-span-2">
           <InfoCard
@@ -156,7 +170,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
       {/* Face Registration/Verification Section */}
       <div className="mt-8 border-t border-gray-200 pt-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Face Recognition</h3>
-        
+
         {!showWebcam && !faceResult && !faceError && (
           <div className="flex gap-3">
             <button
@@ -221,26 +235,23 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
 
         {/* Face Verification Result */}
         {faceResult && webcamMode === 'verify' && (
-          <div className={`mt-6 rounded-lg p-6 ${
-            faceResult.verified 
-              ? 'bg-green-50 border border-green-200' 
-              : 'bg-yellow-50 border border-yellow-200'
-          }`}>
+          <div className={`mt-6 rounded-lg p-6 ${faceResult.verified
+            ? 'bg-green-50 border border-green-200'
+            : 'bg-yellow-50 border border-yellow-200'
+            }`}>
             <div className="flex items-start gap-4">
               <div className="text-3xl">{faceResult.verified ? '✅' : '⚠️'}</div>
               <div className="flex-1">
-                <h4 className={`text-lg font-semibold mb-2 ${
-                  faceResult.verified ? 'text-green-900' : 'text-yellow-900'
-                }`}>
+                <h4 className={`text-lg font-semibold mb-2 ${faceResult.verified ? 'text-green-900' : 'text-yellow-900'
+                  }`}>
                   {faceResult.verified ? 'Face Verification Successful!' : 'Face Verification Failed'}
                 </h4>
                 <p className={faceResult.verified ? 'text-green-800' : 'text-yellow-800'}>
                   {faceResult.message}
                 </p>
                 {faceResult.confidence !== undefined && faceResult.confidence > 0 && (
-                  <p className={`text-sm mt-2 ${
-                    faceResult.verified ? 'text-green-700' : 'text-yellow-700'
-                  }`}>
+                  <p className={`text-sm mt-2 ${faceResult.verified ? 'text-green-700' : 'text-yellow-700'
+                    }`}>
                     Confidence: {(faceResult.confidence * 100).toFixed(1)}%
                   </p>
                 )}

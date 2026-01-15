@@ -311,6 +311,7 @@ class VoterIDFetcher:
             'polling_station': ['psbuildingName', 'pollingStation', 'psName'],
             'polling_station_address': ['buildingAddress'],
             'polling_station_room': ['psRoomDetails'],
+            'part_lat_long': ['partLatLong', 'latLong'],
         }
         
         # Try to extract from response
@@ -687,7 +688,9 @@ async def face_verify(request: FaceVerifyRequest):
         similarity = embedder.compare_embeddings(captured_embedding, registered_embedding)
         
         # DeepFace's default ArcFace + cosine verification threshold is ~0.68
-        similarity_threshold = 0.68
+        # DeepFace's default ArcFace + cosine verification threshold is ~0.68
+        # User requested override to 0.50
+        similarity_threshold = 0.50
         
         verified = similarity >= similarity_threshold
         confidence = float(similarity)
