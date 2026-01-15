@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { castVote, checkEpicVotedStatus } from '@/services/votingService'
+import { useOfflineVoting } from '@/hooks/useOfflineVoting'
 
 // Helper function to update aggregated voter demographics
 function updateVoterDemographics(gender: string | null, age: number | null) {
@@ -60,6 +61,9 @@ export default function Dashboard() {
     const [epicNumber, setEpicNumber] = useState<string | null>(null)
     const [hasVoted, setHasVoted] = useState<boolean>(false)
     const [checkingVoteStatus, setCheckingVoteStatus] = useState(false)
+    
+    // Offline voting hook
+    const { isOnline, pendingCount, isSyncing, syncVotes, hasPendingVotes } = useOfflineVoting()
 
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
     const [voteStep, setVoteStep] = useState<'idle' | 'confirm' | 'mining' | 'success' | 'error'>('idle')
@@ -326,11 +330,35 @@ export default function Dashboard() {
         setTxHash(null)
 
         try {
-            const { txHash } = await castVote({
+            const result = await castVote({
                 epicNumber: epicNumber,
                 candidateId: selectedCandidate.id,
                 wardId: wardNoState,
+                candidateName: selectedCandidate.candidate_name,
             })
+            
+            // Check if vote was queued (offline mode)
+            if ((result as any).queued) {
+                // Vote was queued for offline sync
+                setVoteStep('success')
+                setTxHash(null)
+                // Store demographics even for queued votes
+                if (typeof window !== 'undefined') {
+                    try {
+                        const voterDataStr = localStorage.getItem('voterData')
+                        if (voterDataStr) {
+                            const voterData = JSON.parse(voterDataStr)
+                            updateVoterDemographics(voterData.gender, voterData.age)
+                        }
+                    } catch (error) {
+                        console.error('Error storing voter demographics:', error)
+                    }
+                }
+                return // Exit early for queued votes
+            }
+            
+            // Vote was cast online
+            const { txHash } = result
             
             // Store voter demographics when vote is cast
             if (typeof window !== 'undefined') {
@@ -536,7 +564,14 @@ export default function Dashboard() {
 
                         {voteStep === 'confirm' && (
                             <div className="text-sm text-gray-400 mb-4">
-                                Clicking <span className="text-white font-semibold">Confirm & Sign</span> will open MetaMask to sign and pay gas.
+                                {isOnline ? (
+                                    <>Clicking <span className="text-white font-semibold">Confirm & Sign</span> will open MetaMask to sign and pay gas.</>
+                                ) : (
+                                    <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-3 text-yellow-200">
+                                        <div className="font-semibold mb-1">⚠️ You are currently offline</div>
+                                        <div className="text-xs">Your vote will be saved locally and automatically submitted when your connection is restored.</div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -557,6 +592,20 @@ export default function Dashboard() {
                                 <div className="text-green-400 font-semibold mb-1">Transaction confirmed</div>
                                 <div className="font-mono break-all bg-gray-950/40 border border-gray-800 rounded-lg p-3">
                                     {txHash}
+                                </div>
+                            </div>
+                        )}
+
+                        {voteStep === 'success' && !txHash && (
+                            <div className="text-sm text-gray-300 mb-4">
+                                <div className="text-yellow-400 font-semibold mb-2 flex items-center gap-2">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Vote queued for offline sync
+                                </div>
+                                <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-3 text-yellow-200">
+                                    Your vote has been saved locally and will be automatically submitted to the blockchain when your connection is restored.
                                 </div>
                             </div>
                         )}
@@ -688,9 +737,61 @@ export default function Dashboard() {
                             <a href="#" className="text-white hover:text-white transition-colors">Dashboard</a>
                         </nav>
                         <div className="h-4 w-px bg-gray-700 hidden md:block"></div>
+                        
+                        {/* Offline Status & Pending Votes Indicator */}
+                        {!isOnline && (
+                            <div className="flex items-center gap-2 bg-yellow-900/30 px-3 py-1.5 rounded-full border border-yellow-700/50">
+                                <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                                </svg>
+                                <span className="text-xs font-semibold text-yellow-400">Offline</span>
+                            </div>
+                        )}
+                        
+                        {hasPendingVotes && isOnline && (
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await syncVotes()
+                                    } catch (error: any) {
+                                        console.error('Sync failed:', error)
+                                    }
+                                }}
+                                disabled={isSyncing}
+                                className="flex items-center gap-2 bg-blue-900/30 px-3 py-1.5 rounded-full border border-blue-700/50 hover:bg-blue-900/50 transition-colors disabled:opacity-50"
+                            >
+                                {isSyncing ? (
+                                    <>
+                                        <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                                        <span className="text-xs font-semibold text-blue-400">Syncing...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        <span className="text-xs font-semibold text-blue-400">
+                                            {pendingCount} pending
+                                        </span>
+                                    </>
+                                )}
+                            </button>
+                        )}
+                        
+                        {hasPendingVotes && !isOnline && (
+                            <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="text-xs font-semibold text-gray-400">
+                                    {pendingCount} queued
+                                </span>
+                            </div>
+                        )}
+                        
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
-                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
                                 <span className="text-xs font-mono text-gray-300">
                                     {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not Connected'}
                                 </span>

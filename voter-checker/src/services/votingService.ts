@@ -1,4 +1,5 @@
 import { ethers } from 'ethers'
+import { offlineVoteStorage } from './offlineVoteStorage'
 
 declare global {
   interface Window {
@@ -74,10 +75,45 @@ export async function castVote(params: {
   epicNumber: string
   candidateId: string | number | bigint
   wardId: string | number | bigint
+  candidateName?: string // Optional: for display in offline queue
+  forceOnline?: boolean // If true, will throw error when offline instead of queueing
 }) {
   if (typeof window === 'undefined') {
     throw new Error('Voting is only available in the browser')
   }
+
+  // Check if device is online
+  const isOnline = navigator.onLine
+
+  // If offline and not forcing online, queue the vote
+  if (!isOnline && !params.forceOnline) {
+    console.log('Device is offline, queueing vote for later sync...')
+    
+    try {
+      const voteId = await offlineVoteStorage.queueVote({
+        epicNumber: params.epicNumber,
+        candidateId: params.candidateId,
+        wardId: params.wardId,
+        candidateName: params.candidateName,
+      })
+      
+      // Return a special response indicating the vote was queued
+      return {
+        txHash: null,
+        receipt: null,
+        queued: true,
+        queueId: voteId,
+      } as any
+    } catch (error: any) {
+      throw new Error(`Failed to queue vote offline: ${error.message || error}`)
+    }
+  }
+
+  // If offline but forceOnline is true, throw error
+  if (!isOnline && params.forceOnline) {
+    throw new Error('Device is offline. Please connect to the internet to vote.')
+  }
+
   if (!window.ethereum) {
     throw new Error('MetaMask not found (window.ethereum missing)')
   }
@@ -276,7 +312,7 @@ export async function castVote(params: {
       gasLimit: gasEstimate + BigInt(50000), // Add buffer to gas estimate
     })
     const receipt = await tx.wait()
-    return { txHash: tx.hash as string, receipt }
+    return { txHash: tx.hash as string, receipt, queued: false }
   } catch (voteError: any) {
     // Log full error for debugging
     console.error('Vote error details:', {
