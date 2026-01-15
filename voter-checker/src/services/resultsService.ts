@@ -219,12 +219,15 @@ export async function getPartyVoteData(): Promise<PartyVoteData[]> {
 
   let candidates: any[] = []
   try {
-    const response = await fetch(supabaseUrl, { headers })
-    if (response.ok) {
-      candidates = await response.json()
-    }
+    // Use fetchWithCache for offline support (short TTL since results change frequently)
+    const { fetchWithCache } = await import('@/utils/fetchWithCache')
+    candidates = await fetchWithCache<any[]>(supabaseUrl, {
+      headers,
+      cacheTTL: 5 * 60 * 1000, // 5 minutes - results change as votes come in
+    })
   } catch (error) {
     console.error('Error fetching candidates:', error)
+    // If offline and no cache, candidates will be empty array
   }
 
   // Create a map of candidate ID to party name

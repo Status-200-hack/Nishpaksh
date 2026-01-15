@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { castVote, checkEpicVotedStatus } from '@/services/votingService'
 import { useOfflineVoting } from '@/hooks/useOfflineVoting'
+import { fetchWithCache } from '@/utils/fetchWithCache'
 
 // Helper function to update aggregated voter demographics
 function updateVoterDemographics(gender: string | null, age: number | null) {
@@ -182,10 +183,11 @@ export default function Dashboard() {
                     if (!two) throw new Error(`Invalid latlong param: "${latlong}"`)
                     const [a, b] = two
 
-                    // 2. Fetch GeoJSON
-                    const geoRes = await fetch('/api/ward-data', { cache: 'no-store' })
-                    if (geoRes.ok) {
-                        const geoData = await geoRes.json()
+                    // 2. Fetch GeoJSON (with cache for offline support)
+                    try {
+                        const geoData = await fetchWithCache('/api/ward-data', {
+                            cache: 'no-store', // Don't use HTTP cache, but use our IndexedDB cache
+                        })
 
                         const findWardForPoint = (lng: number, lat: number): number | null => {
                             let detectedWard: number | null = null
@@ -238,8 +240,9 @@ export default function Dashboard() {
                                 attempt2: { lng: attempts[1].lng, lat: attempts[1].lat },
                             })
                         }
-                    } else {
-                        console.error("Failed to load ward geojson:", geoRes.status)
+                    } catch (geoError: any) {
+                        console.error("Failed to load ward geojson:", geoError.message || geoError)
+                        // If offline and no cache, use default ward
                     }
                 } catch (e) {
                     console.error("Error detecting ward:", e)
@@ -249,7 +252,7 @@ export default function Dashboard() {
             setWardName(`Ward ${wardNo}`)
             setWardNoState(wardNo)
 
-            // 4. Fetch Candidates for Ward
+            // 4. Fetch Candidates for Ward (with cache for offline support)
             try {
                 const url = `https://kvixkemyrydjihzqwaat.supabase.co/rest/v1/bmc_candidates?select=*%2Ccase_info%3Abmc_candidate_case_info%21bmc_candidate_case_info_candidate_id_fkey%28education%2Cactive_cases%2Cclosed_cases%29&ward_no=eq.${wardNo}`
                 const headers = {
@@ -257,15 +260,16 @@ export default function Dashboard() {
                     "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2aXhrZW15cnlkamloenF3YWF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1MzU2MTEsImV4cCI6MjA4MzExMTYxMX0.3CaKW2n-IH9uOJOB_RJU8cSAF-Toq1wCc43u5QLTJCQ"
                 }
 
-                const response = await fetch(url, { headers })
-                if (response.ok) {
-                    const data = await response.json()
-                    setCandidates(data)
-                } else {
-                    console.error("Failed to fetch candidates")
-                }
-            } catch (error) {
-                console.error("Error fetching candidates:", error)
+                // Use fetchWithCache - will use cache if offline, fetch fresh if online
+                const data = await fetchWithCache<Candidate[]>(url, {
+                    headers,
+                    cacheTTL: 24 * 60 * 60 * 1000, // 24 hours - candidates don't change often
+                })
+                setCandidates(data)
+            } catch (error: any) {
+                console.error("Error fetching candidates:", error.message || error)
+                // If offline and no cache, candidates will be empty array
+                // User can still see the dashboard, just won't see candidates
             } finally {
                 setLoading(false)
             }
@@ -668,10 +672,15 @@ export default function Dashboard() {
             {/* Sidebar */}
             <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col hidden md:flex">
                 <div className="p-6 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                        <span className="text-gray-900 font-bold text-xl">L</span>
+                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                        </svg>
                     </div>
-                    <span className="font-bold text-lg">Project Ballot</span>
+                    <div>
+                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">Nishpaksh</span>
+                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">DIGITAL INDIA INITIATIVE</p>
+                    </div>
                 </div>
 
                 <nav className="flex-1 px-4 py-6 space-y-2">
@@ -877,8 +886,8 @@ export default function Dashboard() {
 
                 {/* Footer */}
                 <div className="border-t border-gray-800 p-4 md:p-6 bg-gray-900 shadow-2xl shrink-0">
-                    <div className="max-w-6xl mx-auto bg-gray-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between border border-gray-700 gap-4">
-                        <div className="flex items-center gap-4 w-full md:w-auto">
+                    <div className="max-w-6xl mx-auto bg-gray-800 rounded-xl p-4 flex items-center justify-center border border-gray-700">
+                        <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center text-blue-400 shrink-0">
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -888,14 +897,6 @@ export default function Dashboard() {
                                 <h4 className="font-semibold text-white">Encrypted Submission</h4>
                                 <p className="text-sm text-gray-400">Your selection remains anonymous</p>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                            <button className="flex-1 md:flex-none px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors">
-                                Cancel
-                            </button>
-                            <button className="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-900/50">
-                                Submit Ballot
-                            </button>
                         </div>
                     </div>
                 </div>

@@ -259,15 +259,29 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                     Confidence: {(faceResult.confidence * 100).toFixed(1)}%
                   </p>
                 )}
-                <button
-                  onClick={() => {
-                    setFaceResult(null)
-                    setFaceError(null)
-                  }}
-                  className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Try Again
-                </button>
+                {faceResult.message && (faceResult.message.toLowerCase().includes('not found') || faceResult.message.toLowerCase().includes('please register')) ? (
+                  <button
+                    onClick={() => {
+                      setFaceResult(null)
+                      setFaceError(null)
+                      setWebcamMode('register')
+                      setShowWebcam(true)
+                    }}
+                    className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    📷 Register Face
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setFaceResult(null)
+                      setFaceError(null)
+                    }}
+                    className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Try Again
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -280,18 +294,33 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
               <div className="text-3xl">❌</div>
               <div className="flex-1">
                 <h4 className="text-lg font-semibold text-red-900 mb-2">
-                  Error
+                  {faceError.toLowerCase().includes('not found') || faceError.toLowerCase().includes('please register')
+                    ? 'Face Not Registered'
+                    : 'Error'}
                 </h4>
                 <p className="text-red-800 mb-2">{faceError}</p>
-                <button
-                  onClick={() => {
-                    setFaceError(null)
-                    setShowWebcam(true)
-                  }}
-                  className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Try Again
-                </button>
+                {faceError.toLowerCase().includes('not found') || faceError.toLowerCase().includes('please register') ? (
+                  <button
+                    onClick={() => {
+                      setFaceError(null)
+                      setWebcamMode('register')
+                      setShowWebcam(true)
+                    }}
+                    className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    📷 Register Face
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setFaceError(null)
+                      setShowWebcam(true)
+                    }}
+                    className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Try Again
+                  </button>
+                )}
               </div>
             </div>
           </div>

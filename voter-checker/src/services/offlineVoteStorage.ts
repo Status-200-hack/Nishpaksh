@@ -17,7 +17,7 @@ export interface QueuedVote {
 
 const DB_NAME = 'NishpakshVotingDB'
 const STORE_NAME = 'queuedVotes'
-const DB_VERSION = 1
+const DB_VERSION = 2 // Updated to match apiCacheStorage version
 
 class OfflineVoteStorage {
   private db: IDBDatabase | null = null

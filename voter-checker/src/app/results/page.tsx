@@ -56,7 +56,7 @@ export default function ResultsPage() {
         if (isAutoRefresh) {
             interval = setInterval(() => {
                 fetchStats()
-            }, 5000) // Refresh every 5 seconds
+            }, 60000) // Refresh every 1 minute
         }
 
         return () => {
@@ -114,9 +114,15 @@ export default function ResultsPage() {
                 getAgeDistribution(),
             ])
             
-            // Ensure block height is updated
+            // Calculate total votes from party data (to sync with Current Vote Count)
+            const totalVotesFromParties = parties.reduce((sum, party) => sum + party.votes, 0)
+            const totalCandidatesFromParties = parties.length > 0 ? parties.length : votingStats.totalCandidates
+            
+            // Ensure block height is updated and sync vote counts
             setStats({
                 ...votingStats,
+                totalVotes: totalVotesFromParties > 0 ? BigInt(totalVotesFromParties) : votingStats.totalVotes,
+                totalCandidates: totalCandidatesFromParties,
                 blockHeight: votingStats.blockHeight, // Force update
             })
             setPartyData(parties)
@@ -135,10 +141,15 @@ export default function ResultsPage() {
             {/* Sidebar - Same as Dashboard */}
             <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col hidden md:flex">
                 <div className="p-6 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                        <span className="text-gray-900 font-bold text-xl">L</span>
+                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                        </svg>
                     </div>
-                    <span className="font-bold text-lg">Project Ballot</span>
+                    <div>
+                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">Nishpaksh</span>
+                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">DIGITAL INDIA INITIATIVE</p>
+                    </div>
                 </div>
 
                 <nav className="flex-1 px-4 py-6 space-y-2">
@@ -405,7 +416,8 @@ export default function ResultsPage() {
                                                     label={({ name, percent }) => {
                                                         const total = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
                                                         if (total === 0) return ''
-                                                        return `${name} ${((percent || 0) * 100).toFixed(1)}%`
+                                                        const percentage = Math.min(100, ((percent || 0) * 100))
+                                                        return `${name} ${percentage.toFixed(1)}%`
                                                     }}
                                                     outerRadius={100}
                                                     innerRadius={60}
@@ -418,8 +430,8 @@ export default function ResultsPage() {
                                                 <Tooltip 
                                                     formatter={(value: any) => {
                                                         const total = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
-                                                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-                                                        return [`${value} (${percentage}%)`, 'Votes']
+                                                        const percentage = total > 0 ? Math.min(100, ((value / total) * 100)) : 0
+                                                        return [`${value} (${percentage.toFixed(1)}%)`, 'Votes']
                                                     }}
                                                 />
                                             </PieChart>
@@ -427,9 +439,12 @@ export default function ResultsPage() {
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                             <div className="text-center">
                                                 <div className="text-3xl font-bold text-white">
-                                                    {stats.totalVotes.toString() === '0' ? '0' : 
-                                                        ((genderData.male + genderData.female + genderData.other) / Number(stats.totalVotes) * 100).toFixed(0)
-                                                    }%
+                                                    {(() => {
+                                                        const genderTotal = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
+                                                        if (genderTotal === 0) return '0'
+                                                        // Show 100% since the pie chart represents the distribution of votes WITH gender data
+                                                        return '100'
+                                                    })()}%
                                                 </div>
                                                 <div className="text-sm text-gray-400">COUNTED</div>
                                             </div>
@@ -440,17 +455,23 @@ export default function ResultsPage() {
                                     <div className="text-center">
                                         <div className="text-gray-400 text-sm mb-1">MALE</div>
                                         <div className="text-white text-xl font-semibold">
-                                            {stats.totalVotes.toString() === '0' ? '0%' : 
-                                                ((genderData.male / (genderData.male + genderData.female + genderData.other || 1)) * 100).toFixed(1)
-                                            }%
+                                            {(() => {
+                                                const genderTotal = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
+                                                if (genderTotal === 0) return '0%'
+                                                const percentage = Math.min(100, ((genderData.male / genderTotal) * 100))
+                                                return `${percentage.toFixed(1)}%`
+                                            })()}
                                         </div>
                                     </div>
                                     <div className="text-center">
                                         <div className="text-gray-400 text-sm mb-1">FEMALE</div>
                                         <div className="text-white text-xl font-semibold">
-                                            {stats.totalVotes.toString() === '0' ? '0%' : 
-                                                ((genderData.female / (genderData.male + genderData.female + genderData.other || 1)) * 100).toFixed(1)
-                                            }%
+                                            {(() => {
+                                                const genderTotal = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
+                                                if (genderTotal === 0) return '0%'
+                                                const percentage = Math.min(100, ((genderData.female / genderTotal) * 100))
+                                                return `${percentage.toFixed(1)}%`
+                                            })()}
                                         </div>
                                     </div>
                                 </div>

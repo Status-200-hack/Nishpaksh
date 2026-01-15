@@ -17,13 +17,13 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
   const [loadingCaptcha, setLoadingCaptcha] = useState(false)
   const [captchaTimestamp, setCaptchaTimestamp] = useState<number | null>(null)
 
-  const fetchCaptcha = async () => {
+  const fetchCaptcha = async (retryCount = 0, maxRetries = 2) => {
     setLoadingCaptcha(true)
     setCaptchaText('') // Clear previous CAPTCHA text
 
     try {
       // Add cache-busting timestamp to prevent caching
-      const response = await fetch(`/api/generate-captcha?t=${Date.now()}`, {
+      const response = await fetch(`/api/generate-captcha?t=${Date.now()}&retry=${retryCount}`, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -32,20 +32,42 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
         cache: 'no-store',
       })
 
+      // Check if response is OK
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
       const data = await response.json()
 
-      if (data.success) {
+      if (data.success && data.captcha && data.id) {
         setCaptchaImage(data.captcha)
         setCaptchaId(data.id)
         setCaptchaTimestamp(Date.now())
         console.log('CAPTCHA loaded successfully:', data.id)
       } else {
-        alert(`Failed to generate CAPTCHA: ${data.error || 'Unknown error'}`)
-        console.error('CAPTCHA generation failed:', data)
+        throw new Error(data.error || 'Failed to generate CAPTCHA')
       }
-    } catch (error) {
-      alert('Error generating CAPTCHA. Please try again.')
-      console.error('CAPTCHA fetch error:', error)
+    } catch (error: any) {
+      console.error(`CAPTCHA fetch error (attempt ${retryCount + 1}/${maxRetries + 1}):`, error)
+      
+      // Auto-retry on failure (up to maxRetries)
+      if (retryCount < maxRetries) {
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return fetchCaptcha(retryCount + 1, maxRetries)
+      }
+      
+      // Show user-friendly error message after all retries failed
+      const errorMessage = error.message || 'Error generating CAPTCHA'
+      console.error('CAPTCHA generation failed after retries:', errorMessage)
+      
+      // Set error state instead of alert
+      setCaptchaImage(null)
+      setCaptchaId(null)
+      
+      // Show error in console and let user manually retry
+      // Don't use alert - it's too intrusive
     } finally {
       setLoadingCaptcha(false)
     }
@@ -137,17 +159,31 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
                     className="w-full h-20 object-contain"
                   />
                 </div>
-              ) : (
+              ) : loadingCaptcha ? (
                 <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 h-20 flex items-center justify-center">
-                  <span className="text-gray-400">Loading CAPTCHA...</span>
+                  <span className="text-gray-400 flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                    Loading CAPTCHA...
+                  </span>
+                </div>
+              ) : (
+                <div className="border border-red-300 rounded-lg p-4 bg-red-50 h-20 flex flex-col items-center justify-center gap-2">
+                  <span className="text-red-600 text-sm font-medium">Failed to load CAPTCHA</span>
+                  <button
+                    type="button"
+                    onClick={() => fetchCaptcha()}
+                    className="text-xs text-red-700 hover:text-red-900 underline"
+                  >
+                    Click to retry
+                  </button>
                 </div>
               )}
             </div>
             <button
               type="button"
-              onClick={fetchCaptcha}
+              onClick={() => fetchCaptcha()}
               disabled={loadingCaptcha}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-black"
             >
               {loadingCaptcha ? '⏳' : '🔄'} {loadingCaptcha ? 'Loading...' : 'Refresh'}
             </button>
