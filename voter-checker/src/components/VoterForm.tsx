@@ -20,7 +20,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
   const fetchCaptcha = async () => {
     setLoadingCaptcha(true)
     setCaptchaText('') // Clear previous CAPTCHA text
-    
+
     try {
       // Add cache-busting timestamp to prevent caching
       const response = await fetch(`/api/generate-captcha?t=${Date.now()}`, {
@@ -31,7 +31,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
         },
         cache: 'no-store',
       })
-      
+
       const data = await response.json()
 
       if (data.success) {
@@ -68,7 +68,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
     <div className="bg-white rounded-2xl shadow-xl p-8">
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
             EPIC Number (Voter ID)
           </label>
           <input
@@ -76,19 +76,19 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
             value={epicNumber}
             onChange={(e) => setEpicNumber(e.target.value.toUpperCase())}
             placeholder="e.g., ABC4567890"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500"
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
             State
           </label>
           <select
             value={state}
             onChange={(e) => setState(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
           >
             <option value="Maharashtra">Maharashtra</option>
             <option value="Delhi">Delhi</option>
@@ -117,7 +117,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium text-gray-900">
               CAPTCHA
             </label>
             {captchaTimestamp && (
@@ -157,7 +157,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
             value={captchaText}
             onChange={(e) => setCaptchaText(e.target.value.toLowerCase())}
             placeholder="Enter CAPTCHA text"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2 text-gray-900 placeholder-gray-500"
             required
           />
         </div>
