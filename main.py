@@ -15,10 +15,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from backend.face import get_detector, get_embedder, get_storage
+from backend.face import get_embedder, get_storage
 import numpy as np
-import cv2
-import base64
 
 
 class VoterIDFetcher:
@@ -590,15 +588,10 @@ async def face_register(request: FaceRegisterRequest):
     Register a face for a voter ID.
     
     Flow:
-    1. Accept voter_id and image
-    2. Detect face using YOLO (rejects if face count ≠ 1)
-    3. Generate embedding
-    4. Store embedding in DB (rejects if voter_id already exists)
-    5. Return success response
-    
-    Rejects if:
-    - voter_id already registered (duplicate)
-    - face count ≠ 1
+    1. Accept voter_id and base64 image
+    2. Use DeepFace (ArcFace + RetinaFace) to detect exactly one face and generate embedding
+    3. Store embedding in DB (rejects if voter_id already exists)
+    4. Return success response
     """
     try:
         # Step 1: Validate inputs
@@ -618,33 +611,15 @@ async def face_register(request: FaceRegisterRequest):
                 detail=f"Duplicate registration: voter_id '{voter_id}' already exists in database"
             )
         
-        # Step 2: Detect face using YOLO
-        detector = get_detector()
-        success, cropped_face_base64, error_message = detector.detect_face(request.image)
-        
-        if not success:
-            # Rejects if face count ≠ 1 (handled by detector)
-            raise HTTPException(status_code=400, detail=error_message)
-        
-        # Decode cropped face from base64 to numpy array for embedding generation
-        # Remove data URL prefix if present
-        base64_str = cropped_face_base64
-        if ',' in base64_str:
-            base64_str = base64_str.split(',')[1]
-        
-        # Decode base64 to image
-        image_data = base64.b64decode(base64_str)
-        nparr = np.frombuffer(image_data, np.uint8)
-        cropped_face_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if cropped_face_image is None:
-            raise HTTPException(status_code=400, detail="Failed to decode cropped face image")
-        
-        # Step 3: Generate embedding
+        # Step 2: Generate embedding from base64 image using DeepFace
         embedder = get_embedder()
-        embedding = embedder.generate_embedding(cropped_face_image)
+        try:
+            embedding = embedder.generate_embedding_from_base64(request.image)
+        except ValueError as e:
+            # DeepFace will raise if no face or multiple faces are detected
+            raise HTTPException(status_code=400, detail=str(e))
         
-        # Step 4: Store embedding in DB
+        # Step 3: Store embedding in DB
         # Get full_name from request or use voter_id as fallback
         full_name = request.full_name.strip() if request.full_name else voter_id
         
@@ -657,12 +632,12 @@ async def face_register(request: FaceRegisterRequest):
         if not store_success:
             raise HTTPException(status_code=400, detail=store_error)
         
-        # Step 5: Return success response
+        # Step 4: Return success response
         return FaceRegisterResponse(
             success=True,
             message=f"Face successfully registered for voter_id: {voter_id}",
             voter_id=voter_id,
-            cropped_face=cropped_face_base64
+            cropped_face=None
         )
         
     except HTTPException:
@@ -673,9 +648,10 @@ async def face_register(request: FaceRegisterRequest):
 @app.post("/face/verify", response_model=FaceVerifyResponse)
 async def face_verify(request: FaceVerifyRequest):
     """
-    Verify a face against a registered voter ID.
-    Accepts voter_id and base64 encoded image.
-    Uses YOLO to detect exactly one face, generates embedding, and compares with registered embedding.
+    Verify a face against a registered voter ID using DeepFace (ArcFace).
+    - Accepts voter_id and base64 encoded image.
+    - Uses DeepFace.represent() to generate embeddings.
+    - Compares embeddings with cosine similarity and threshold.
     """
     try:
         # Validate inputs
@@ -697,46 +673,21 @@ async def face_verify(request: FaceVerifyRequest):
                 detail=f"voter_id '{voter_id}' not found in database. Please register first."
             )
         
-        # Step 2: Detect face using YOLO
-        detector = get_detector()
-        success, cropped_face_base64, error_message = detector.detect_face(request.image)
-        
-        if not success:
-            raise HTTPException(status_code=400, detail=error_message)
-        
-        # Step 3: Decode cropped face from base64 to numpy array for embedding generation
-        base64_str = cropped_face_base64
-        if ',' in base64_str:
-            base64_str = base64_str.split(',')[1]
-        
-        # Decode base64 to image
-        image_data = base64.b64decode(base64_str)
-        nparr = np.frombuffer(image_data, np.uint8)
-        cropped_face_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if cropped_face_image is None:
-            raise HTTPException(status_code=400, detail="Failed to decode cropped face image")
-        
-        # Step 4: Generate embedding from captured face
+        # Step 2: Generate embedding from captured face using DeepFace
         embedder = get_embedder()
-        captured_embedding = embedder.generate_embedding(cropped_face_image)
+        try:
+            captured_embedding = embedder.generate_embedding_from_base64(request.image)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         
-        # Step 5: Get registered embedding
+        # Step 3: Get registered embedding
         registered_embedding = registered_data['embedding']
         
-        # Step 6: Compare embeddings using cosine similarity
-        # Ensure embeddings are normalized (L2 norm = 1)
-        captured_norm = captured_embedding / np.linalg.norm(captured_embedding)
-        registered_norm = registered_embedding / np.linalg.norm(registered_embedding)
+        # Step 4: Compare embeddings using cosine similarity
+        similarity = embedder.compare_embeddings(captured_embedding, registered_embedding)
         
-        # Cosine similarity = dot product of normalized vectors
-        similarity = np.dot(captured_norm, registered_norm)
-        
-        # Cosine similarity ranges from -1 to 1, but for face embeddings it's typically 0 to 1
-        # Typical threshold for face recognition: 0.5-0.7
-        # Lower threshold (0.5) = more lenient, higher (0.7) = stricter
-        # Using 0.5 as default threshold for better matching
-        similarity_threshold = 0.5
+        # DeepFace's default ArcFace + cosine verification threshold is ~0.68
+        similarity_threshold = 0.68
         
         verified = similarity >= similarity_threshold
         confidence = float(similarity)
@@ -752,7 +703,7 @@ async def face_verify(request: FaceVerifyRequest):
             verified=verified,
             confidence=confidence,
             message=message,
-            cropped_face=cropped_face_base64
+            cropped_face=None
         )
     except HTTPException:
         raise

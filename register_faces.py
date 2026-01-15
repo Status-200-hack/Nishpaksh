@@ -89,58 +89,24 @@ def load_image(image_path: Path) -> np.ndarray:
     return image
 
 
-def process_image_for_embedding(image: np.ndarray, detector) -> tuple:
+def image_to_base64(image: np.ndarray) -> str:
     """
-    Process image to extract face and prepare for embedding generation.
-    
-    Steps:
-    1. Detect face using YOLO detector
-    2. Reject if face count ≠ 1
-    3. Return cropped face image as base64 (for embedder compatibility)
-    
-    Args:
-        image: Input image as numpy array (BGR format)
-        detector: FaceDetector instance
-        
-    Returns:
-        Tuple of (success, cropped_face_image, error_message)
+    Convert a BGR image to a base64-encoded JPEG data URL.
     """
-    # Convert image to base64 for detector (it expects base64 input)
-    # Encode image to JPEG
-    _, buffer = cv2.imencode('.jpg', image)
-    # Convert to base64
     import base64
-    image_base64 = base64.b64encode(buffer).decode('utf-8')
-    
-    # Detect face using YOLO detector
-    # This will reject if face count ≠ 1
-    success, cropped_face_base64, error_message = detector.detect_face(image_base64)
-    
+
+    success, buffer = cv2.imencode('.jpg', image)
     if not success:
-        return False, None, error_message
-    
-    # Decode cropped face back to numpy array for embedding
-    # Remove data URL prefix if present
-    base64_str = cropped_face_base64
-    if ',' in base64_str:
-        base64_str = base64_str.split(',')[1]
-    
-    # Decode base64 to image
-    image_data = base64.b64decode(base64_str)
-    nparr = np.frombuffer(image_data, np.uint8)
-    cropped_face_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
-    if cropped_face_image is None:
-        return False, None, "Failed to decode cropped face image"
-    
-    return True, cropped_face_image, None
+        raise ValueError("Failed to encode image to JPEG")
+
+    image_base64 = base64.b64encode(buffer).decode('utf-8')
+    return f"data:image/jpeg;base64,{image_base64}"
 
 
 def register_face_from_image(
     image_path: Path,
-    detector,
     embedder,
-    storage
+    storage,
 ) -> tuple:
     """
     Register a single face from an image file.
@@ -149,9 +115,8 @@ def register_face_from_image(
     1. Extract voter_id from filename
     2. Check if voter_id already exists (skip if exists)
     3. Load image
-    4. Detect face (reject if face count ≠ 1)
-    5. Generate embedding using FaceNet/ArcFace
-    6. Store embedding in SQLite database
+    4. Generate embedding using DeepFace (ArcFace)
+    5. Store embedding in SQLite database
     
     Args:
         image_path: Path to image file
@@ -176,26 +141,16 @@ def register_face_from_image(
         image = load_image(image_path)
         print(f"  ✓ Image loaded successfully")
         
-        # Step 4: Detect face using YOLO detector
-        # This will reject if face count ≠ 1
-        print(f"  → Detecting face...")
-        success, cropped_face_image, error_message = process_image_for_embedding(image, detector)
-        
-        if not success:
-            return voter_id, False, f"Face detection failed: {error_message}"
-        
-        print(f"  ✓ Face detected successfully (exactly 1 face)")
-        
-        # Step 5: Generate embedding using FaceNet/ArcFace
-        # The embedder expects numpy array (BGR format)
-        print(f"  → Generating embedding...")
-        embedding = embedder.generate_embedding(cropped_face_image)
+        # Step 4: Generate embedding using DeepFace (ArcFace) from base64 image
+        print(f"  → Generating embedding with DeepFace...")
+        image_base64 = image_to_base64(image)
+        embedding = embedder.generate_embedding_from_base64(image_base64)
         
         # Embedding is already a numpy array, no need to convert to list
         # The storage module will handle serialization
         print(f"  ✓ Embedding generated (shape: {embedding.shape})")
         
-        # Step 6: Store embedding in SQLite database
+        # Step 5: Store embedding in SQLite database
         # Use voter_id as full_name if not available
         print(f"  → Storing in database...")
         store_success, store_error = storage.store_embedding(
@@ -241,15 +196,11 @@ def main():
     print(f"Found {len(image_files)} image file(s)")
     print()
     
-    # Step 2: Initialize face detection, embedding, and storage modules
+    # Step 2: Initialize embedding and storage modules
     print("Step 2: Initializing modules...")
-    print("  → Loading YOLO face detector...")
-    detector = get_detector()
-    print("  ✓ Face detector loaded")
-    
-    print("  → Loading FaceNet/ArcFace embedder...")
+    print("  → Loading DeepFace embedder (ArcFace)...")
     embedder = get_embedder()
-    print("  ✓ Face embedder loaded")
+    print("  ✓ Embedder loaded")
     
     print("  → Initializing SQLite storage...")
     storage = get_storage()
@@ -269,9 +220,8 @@ def main():
     for image_path in image_files:
         voter_id, success, message = register_face_from_image(
             image_path,
-            detector,
             embedder,
-            storage
+            storage,
         )
         
         if success:

@@ -1,302 +1,166 @@
 """
-Face Embedding Generation Module
+DeepFace-based Face Embedding Module
 
-Generates face embeddings using pretrained FaceNet or ArcFace models.
-- Uses pretrained models (no training required)
-- Input: cropped face image
-- Output: embedding vector (128D or 512D)
-- Embeddings are non-reversible (one-way transformation)
+Replaces the previous YOLO + FaceNet/ArcFace pipeline with a simpler,
+more robust DeepFace pipeline:
+
+- Uses DeepFace with ArcFace backbone (no training required)
+- Handles face detection, alignment, and preprocessing internally
+- We only call DeepFace.represent() to get embeddings
+- Embeddings are used with cosine similarity for verification
+
+Why DeepFace?
+- Wraps several strong face recognition models behind a simple API
+- Takes care of face detection (RetinaFace), alignment, and normalization
+- Lets us stay fully local/offline once models are downloaded
 """
 
 import base64
-import numpy as np
-from typing import Optional, Tuple
+import inspect
+from typing import Optional
+
 import cv2
-from PIL import Image
-import torch
-import torch.nn.functional as F
+import numpy as np
+from deepface import DeepFace
 
-try:
-    from facenet_pytorch import MTCNN, InceptionResnetV1
-    FACENET_AVAILABLE = True
-except ImportError:
-    FACENET_AVAILABLE = False
-    print("Warning: facenet-pytorch not available. Install with: pip install facenet-pytorch")
-
-try:
-    import insightface
-    from insightface.app import FaceAnalysis
-    INSIGHTFACE_AVAILABLE = True
-except ImportError:
-    INSIGHTFACE_AVAILABLE = False
-    print("Warning: insightface not available. Install with: pip install insightface")
+# DeepFace configuration
+MODEL_NAME = "ArcFace"
+DETECTOR_BACKEND = "retinaface"
+DISTANCE_METRIC = "cosine"  # For documentation; we compute cosine similarity ourselves
+SIMILARITY_THRESHOLD = 0.68  # similarity >= 0.68 → VERIFIED
 
 
 class FaceEmbedder:
     """
-    Face embedding generator using pretrained FaceNet or ArcFace models.
-    
+    DeepFace-based face embedding generator.
+
     IMPORTANT: Face embeddings are NON-REVERSIBLE.
     - Embeddings are one-way transformations from face images to fixed-size vectors
     - You CANNOT reconstruct the original face image from an embedding
-    - Embeddings are designed for comparison (similarity/distance) between faces
-    - They preserve identity information but lose visual details
+    - Embeddings are designed for similarity comparison between faces
     - This is by design for privacy and security reasons
     """
-    
-    def __init__(self, model_type: str = 'facenet', embedding_dim: int = 512):
+
+    def __init__(self) -> None:
         """
-        Initialize the face embedder with a pretrained model.
-        
-        Args:
-            model_type: 'facenet' or 'arcface' (default: 'facenet')
-            embedding_dim: Expected embedding dimension (512 for FaceNet, 512 for ArcFace)
+        Initialize the DeepFace pipeline.
+
+        DeepFace will lazily load the ArcFace model and RetinaFace detector on
+        first use. No training is performed; we only use pretrained weights.
         """
-        self.model_type = model_type.lower()
-        self.embedding_dim = embedding_dim
-        self.model = None
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        # Load the appropriate model
-        if self.model_type == 'facenet':
-            self._load_facenet()
-        elif self.model_type == 'arcface':
-            self._load_arcface()
-        else:
-            raise ValueError(f"Unsupported model type: {model_type}. Use 'facenet' or 'arcface'")
-    
-    def _load_facenet(self):
-        """Load pretrained FaceNet model."""
-        if not FACENET_AVAILABLE:
-            raise ImportError(
-                "facenet-pytorch is not installed. "
-                "Install with: pip install facenet-pytorch"
-            )
-        
-        # Load pretrained FaceNet model (InceptionResnetV1)
-        # This model produces 512-dimensional embeddings
-        # Model weights are automatically downloaded on first use
-        self.model = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
-        
-        print(f"FaceNet model loaded on {self.device}")
-        print(f"Embedding dimension: 512")
-    
-    def _load_arcface(self):
-        """Load pretrained ArcFace model."""
-        if not INSIGHTFACE_AVAILABLE:
-            raise ImportError(
-                "insightface is not installed. "
-                "Install with: pip install insightface"
-            )
-        
-        # Initialize InsightFace app with ArcFace model
-        # This will download the model automatically on first use
-        self.model = FaceAnalysis(
-            name='buffalo_l',  # Large model with best accuracy
-            providers=['CPUExecutionProvider']  # Use CPU, change to CUDAExecutionProvider for GPU
-        )
-        self.model.prepare(ctx_id=0, det_size=(640, 640))
-        
-        print(f"ArcFace model loaded")
-        print(f"Embedding dimension: 512")
-    
-    def _preprocess_image_facenet(self, image: np.ndarray) -> torch.Tensor:
-        """
-        Preprocess image for FaceNet model.
-        
-        Args:
-            image: numpy array image (BGR format from OpenCV)
-            
-        Returns:
-            Preprocessed tensor ready for FaceNet
-        """
-        # Convert BGR to RGB
-        if len(image.shape) == 3 and image.shape[2] == 3:
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        else:
-            image_rgb = image
-        
-        # Convert to PIL Image
-        pil_image = Image.fromarray(image_rgb)
-        
-        # Resize to 160x160 (FaceNet input size)
-        pil_image = pil_image.resize((160, 160), Image.LANCZOS)
-        
-        # Convert to tensor and normalize
-        # FaceNet expects images in range [0, 1] normalized with ImageNet stats
-        img_tensor = torch.from_numpy(np.array(pil_image)).float()
-        img_tensor = img_tensor.permute(2, 0, 1)  # HWC to CHW
-        img_tensor = img_tensor / 255.0  # Normalize to [0, 1]
-        
-        # Normalize with ImageNet mean and std
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-        img_tensor = (img_tensor - mean) / std
-        
-        # Add batch dimension
-        img_tensor = img_tensor.unsqueeze(0).to(self.device)
-        
-        return img_tensor
-    
-    def _preprocess_image_arcface(self, image: np.ndarray) -> np.ndarray:
-        """
-        Preprocess image for ArcFace model.
-        
-        Args:
-            image: numpy array image (BGR format from OpenCV)
-            
-        Returns:
-            Preprocessed image ready for ArcFace
-        """
-        # ArcFace expects BGR format, so we keep it as is
-        # The model will handle preprocessing internally
-        return image
-    
-    def _generate_embedding_facenet(self, image: np.ndarray) -> np.ndarray:
-        """
-        Generate embedding using FaceNet model.
-        
-        Args:
-            image: numpy array image (BGR format)
-            
-        Returns:
-            Face embedding vector (512D)
-        """
-        # Preprocess image
-        img_tensor = self._preprocess_image_facenet(image)
-        
-        # Generate embedding (no gradient computation needed)
-        with torch.no_grad():
-            embedding = self.model(img_tensor)
-        
-        # L2 normalize the embedding (standard practice for face embeddings)
-        embedding = F.normalize(embedding, p=2, dim=1)
-        
-        # Convert to numpy and squeeze batch dimension
-        embedding_np = embedding.cpu().numpy().squeeze()
-        
-        return embedding_np
-    
-    def _generate_embedding_arcface(self, image: np.ndarray) -> np.ndarray:
-        """
-        Generate embedding using ArcFace model.
-        
-        Args:
-            image: numpy array image (BGR format)
-            
-        Returns:
-            Face embedding vector (512D)
-        """
-        # Preprocess image
-        preprocessed_image = self._preprocess_image_arcface(image)
-        
-        # Run face analysis (detection + recognition)
-        faces = self.model.get(preprocessed_image)
-        
-        if len(faces) == 0:
-            raise ValueError("No face detected in image for ArcFace embedding")
-        
-        # Get embedding from the first (and should be only) face
-        # ArcFace embeddings are already normalized
-        embedding = faces[0].embedding
-        
-        return embedding
-    
-    def generate_embedding(self, image: np.ndarray) -> np.ndarray:
-        """
-        Generate face embedding from cropped face image.
-        
-        IMPORTANT: Embeddings are NON-REVERSIBLE.
-        - This function converts a face image into a fixed-size vector
-        - The original face image CANNOT be reconstructed from the embedding
-        - Embeddings are designed for similarity comparison, not image reconstruction
-        - This is a one-way transformation for privacy and security
-        
-        Args:
-            image: numpy array representing cropped face image (BGR format from OpenCV)
-            
-        Returns:
-            Face embedding vector as numpy array (512D for FaceNet/ArcFace)
-            - Normalized to unit length (L2 norm = 1)
-            - Suitable for cosine similarity comparison
-        """
-        if self.model_type == 'facenet':
-            embedding = self._generate_embedding_facenet(image)
-        elif self.model_type == 'arcface':
-            embedding = self._generate_embedding_arcface(image)
-        else:
-            raise ValueError(f"Unsupported model type: {self.model_type}")
-        
-        return embedding
-    
-    def generate_embedding_from_base64(self, base64_image: str) -> np.ndarray:
-        """
-        Generate face embedding from base64 encoded image.
-        
-        IMPORTANT: Embeddings are NON-REVERSIBLE.
-        See generate_embedding() for details.
-        
-        Args:
-            base64_image: Base64 encoded image string
-            
-        Returns:
-            Face embedding vector as numpy array
-        """
-        # Decode base64 to image
-        image = self._decode_base64_image(base64_image)
-        
-        # Generate embedding
-        embedding = self.generate_embedding(image)
-        
-        return embedding
-    
+        self.model_name = MODEL_NAME
+        self.detector_backend = DETECTOR_BACKEND
+
     def _decode_base64_image(self, base64_string: str) -> np.ndarray:
         """
-        Decode base64 string to numpy array image.
-        
-        Args:
-            base64_string: Base64 encoded image string
-            
-        Returns:
-            numpy array representing the image (BGR format for OpenCV)
+        Decode base64 string to numpy array image (BGR format for OpenCV).
         """
+        if not base64_string or not base64_string.strip():
+            raise ValueError("Base64 image string is empty")
+
         # Remove data URL prefix if present
-        if ',' in base64_string:
-            base64_string = base64_string.split(',')[1]
-        
+        if "," in base64_string:
+            base64_string = base64_string.split(",", 1)[1]
+
         # Decode base64
         image_data = base64.b64decode(base64_string)
-        
+        if not image_data:
+            raise ValueError("Decoded image data is empty")
+
         # Convert to numpy array
         nparr = np.frombuffer(image_data, np.uint8)
-        
-        # Decode image
+        if nparr.size == 0:
+            raise ValueError("Image buffer is empty after decoding")
+
+        # Decode image (BGR)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
         if img is None:
-            raise ValueError("Failed to decode image from base64 string")
-        
+            raise ValueError("OpenCV failed to decode image from base64 string")
+
         return img
+
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """
+        Compute cosine similarity between two embedding vectors.
+        """
+        a = a.astype(np.float32)
+        b = b.astype(np.float32)
+
+        a_norm = np.linalg.norm(a)
+        b_norm = np.linalg.norm(b)
+        if a_norm == 0.0 or b_norm == 0.0:
+            raise ValueError("One of the embeddings has zero norm")
+
+        a_unit = a / a_norm
+        b_unit = b / b_norm
+        return float(np.dot(a_unit, b_unit))
+
+    def generate_embedding_from_base64(self, base64_image: str) -> np.ndarray:
+        """
+        Generate a face embedding from a base64 encoded image.
+
+        - Ensures exactly one face is detected.
+        - Uses DeepFace.represent() with ArcFace + RetinaFace.
+        """
+        # Decode base64 to image (BGR)
+        image = self._decode_base64_image(base64_image)
+
+        # DeepFace has had a few API variations across versions (arg names differ).
+        # To keep this project working across DeepFace releases, we:
+        # - pass the image as the first positional argument (DeepFace treats it as img_path/img)
+        # - only pass keyword args that exist in the current DeepFace.represent() signature
+        #
+        # enforce_detection=True ensures that no-face images raise an error.
+        base_kwargs = {
+            "model_name": self.model_name,
+            "detector_backend": self.detector_backend,
+            "distance_metric": DISTANCE_METRIC,
+            "enforce_detection": True,
+            "align": True,
+        }
+
+        sig = inspect.signature(DeepFace.represent)
+        supported = set(sig.parameters.keys())
+        filtered_kwargs = {k: v for k, v in base_kwargs.items() if k in supported}
+
+        representations = DeepFace.represent(image, **filtered_kwargs)
+
+        if not isinstance(representations, list) or len(representations) == 0:
+            raise ValueError("No face detected in the image")
+
+        if len(representations) > 1:
+            raise ValueError(
+                f"Multiple faces detected ({len(representations)}). Exactly one face is required."
+            )
+
+        # DeepFace.represent returns a dict with 'embedding' key
+        embedding = np.array(representations[0]["embedding"], dtype=np.float32)
+        return embedding
+
+    def compare_embeddings(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
+        """
+        Compare two embeddings using cosine similarity.
+
+        Returns:
+            similarity score in [−1, 1], where 1.0 means identical direction.
+        """
+        return self._cosine_similarity(emb1, emb2)
 
 
 # Global embedder instance (lazy loading)
 _embedder_instance: Optional[FaceEmbedder] = None
 
 
-def get_embedder(model_type: str = 'facenet', embedding_dim: int = 512) -> FaceEmbedder:
+def get_embedder(*_args, **_kwargs) -> FaceEmbedder:
     """
-    Get or create the global face embedder instance.
-    Uses singleton pattern for efficiency.
-    
-    Args:
-        model_type: 'facenet' or 'arcface' (default: 'facenet')
-        embedding_dim: Expected embedding dimension (default: 512)
-    
-    Returns:
-        FaceEmbedder instance
+    Get or create the global DeepFace-based face embedder instance.
+
+    The old API took (model_type, embedding_dim); we ignore those to keep
+    backwards compatibility with existing imports.
     """
     global _embedder_instance
     if _embedder_instance is None:
-        _embedder_instance = FaceEmbedder(model_type=model_type, embedding_dim=embedding_dim)
+        _embedder_instance = FaceEmbedder()
     return _embedder_instance
+
 

@@ -10,3 +10,7 @@ facenet-pytorch>=2.5.0
 torch>=2.0.0
 torchvision>=0.15.0
 
+# DeepFace pipeline (ArcFace + RetinaFace) - used for face detection + embeddings
+deepface>=0.0.93
+tf-keras>=2.20.0
+

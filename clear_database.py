@@ -39,10 +39,10 @@ def main():
     for voter in voters:
         success, error = storage.delete_embedding(voter['voter_id'])
         if success:
-            print(f"  ✓ Deleted: {voter['voter_id']}")
+            print(f"  [OK] Deleted: {voter['voter_id']}")
             deleted_count += 1
         else:
-            print(f"  ✗ Failed to delete {voter['voter_id']}: {error}")
+            print(f"  [FAIL] Failed to delete {voter['voter_id']}: {error}")
     
     print()
     print("=" * 70)
