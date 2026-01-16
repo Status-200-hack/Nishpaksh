@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Image from 'next/image'
 import VoterForm from '@/components/VoterForm'
 import VoterDetails from '@/components/VoterDetails'
 import ConnectWallet from '@/components/ConnectWallet'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 // Helper function to update aggregated voter demographics
 function updateVoterDemographics(gender: string | null, age: number | null) {
@@ -38,6 +41,7 @@ function updateVoterDemographics(gender: string | null, age: number | null) {
 }
 
 export default function Home() {
+  const { t } = useLanguage()
   const [voterData, setVoterData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +55,7 @@ export default function Home() {
 
   const handleCastVote = () => {
     if (!walletAddress) {
-      alert("Please connect your MetaMask wallet to proceed.")
+      alert(t('wallet.metaMaskNotInstalled'))
       return
     }
 
@@ -154,19 +158,20 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Nishpaksh</span>
-                <p className="text-[10px] text-blue-400 tracking-wider font-semibold">DIGITAL INDIA INITIATIVE</p>
+                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">{t('common.appName')}</span>
+                <p className="text-[10px] text-blue-400 tracking-wider font-semibold">{t('common.tagline')}</p>
               </div>
             </div>
 
             <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-              <a href="#" className="hover:text-white transition-colors">Security</a>
-              <a href="#" className="hover:text-white transition-colors">How it Works</a>
-              <a href="#" className="hover:text-white transition-colors">FAQs</a>
-              <a href="#" className="hover:text-white transition-colors">Whitepaper</a>
+              <a href="#" className="hover:text-white transition-colors">{t('nav.security')}</a>
+              <a href="#" className="hover:text-white transition-colors">{t('nav.howItWorks')}</a>
+              <a href="#" className="hover:text-white transition-colors">{t('nav.faqs')}</a>
+              <a href="#" className="hover:text-white transition-colors">{t('nav.whitepaper')}</a>
             </div>
 
             <div className="flex items-center gap-4">
+              <LanguageSwitcher />
               <ConnectWallet onConnect={handleWalletConnect} />
               <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-600 transition-all cursor-pointer">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,17 +198,17 @@ export default function Home() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-900/30 border border-blue-800 text-blue-400 text-xs font-bold tracking-wider mb-8">
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                NETWORK LIVE: BMC ELECTIONS
+                {t('home.networkLive')}
               </div>
 
               <h1 className="text-5xl md:text-7xl font-extrabold text-white leading-tight mb-6">
-                India's First <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-green-500">Blockchain</span> <br />
-                Voting System
+                {t('home.title')} <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-white to-green-500">{t('home.blockchain')}</span> <br />
+                {t('home.votingSystem')}
               </h1>
 
               <p className="text-lg text-gray-400 mb-10 max-w-xl leading-relaxed">
-                Secure. Transparent. Immutable. Empowering the world's largest democracy with decentralized technology. Your vote, secured by the blockchain.
+                {t('home.subtitle')}
               </p>
 
               <div className="flex flex-wrap gap-4">
@@ -214,7 +219,7 @@ export default function Home() {
                   <svg className="w-5 h-5 group-hover:-translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
-                  Cast Your Vote
+                  {t('home.castYourVote')}
                 </button>
 
               </div>
@@ -224,27 +229,14 @@ export default function Home() {
             <div className="relative">
               <div className="relative rounded-2xl overflow-hidden border border-gray-800 shadow-2xl bg-gray-900/50 backdrop-blur-sm">
                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-purple-500/10 z-0"></div>
-                {/* Decorative UI elements mimicking the image */}
-                <div className="p-8 relative z-10 flex flex-col items-center justify-center min-h-[400px]">
-                  <div className="w-48 h-48 relative mb-8">
-                    {/* Abstract Cube/Ballot Box Graphic */}
-                    <div className="absolute inset-0 border-2 border-blue-500/30 rounded-lg transform rotate-12 scale-90"></div>
-                    <div className="absolute inset-0 border-2 border-cyan-400/50 rounded-lg transform -rotate-6 animate-pulse"></div>
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-cyan-400/20 rounded-lg flex items-center justify-center backdrop-blur-sm border border-blue-400/30">
-                      <span className="text-4xl font-mono font-bold text-cyan-300">8A 88</span>
-                    </div>
-                  </div>
-
-                  <div className="w-full flex justify-between items-end border-t border-gray-700 pt-6">
-                    <div>
-                      <p className="text-xs text-gray-500 font-bold tracking-widest uppercase mb-1">Live Node Map</p>
-                      <p className="text-xl font-bold text-white">Mumbai, India</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500 font-bold tracking-widest uppercase mb-1">Active Validators</p>
-                      <p className="text-2xl font-bold text-cyan-400">14,202</p>
-                    </div>
-                  </div>
+                <div className="relative w-full h-full min-h-[400px] flex items-center justify-center">
+                  <Image
+                    src="/voterid3d1.png"
+                    alt="Voter ID 3D"
+                    fill
+                    className="object-cover rounded-lg"
+                    priority
+                  />
                 </div>
               </div>
 
@@ -259,7 +251,7 @@ export default function Home() {
             <div className="bg-gray-800/50 backdrop-blur border border-gray-700 p-6 rounded-2xl relative overflow-hidden group hover:border-orange-500/50 transition-colors">
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-orange-500 rounded-r-lg"></div>
               <div className="flex justify-between items-start mb-2">
-                <p className="text-gray-400 text-sm font-medium">Blocks Validated</p>
+                <p className="text-gray-400 text-sm font-medium">{t('home.blocksValidated')}</p>
                 <span className="text-orange-500">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -268,14 +260,14 @@ export default function Home() {
               </div>
               <p className="text-3xl font-bold text-white mb-2">1.2M+</p>
               <p className="text-green-400 text-xs font-bold flex items-center gap-1">
-                <span className="text-green-500">↗</span> +12% Efficiency
+                <span className="text-green-500">↗</span> +12% {t('home.efficiency')}
               </p>
             </div>
 
             <div className="bg-gray-800/50 backdrop-blur border border-gray-700 p-6 rounded-2xl relative overflow-hidden group hover:border-white transition-colors">
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-white rounded-r-lg"></div>
               <div className="flex justify-between items-start mb-2">
-                <p className="text-gray-400 text-sm font-medium">Total Votes Cast</p>
+                <p className="text-gray-400 text-sm font-medium">{t('home.totalVotesCast')}</p>
                 <span className="text-white">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -284,14 +276,14 @@ export default function Home() {
               </div>
               <p className="text-3xl font-bold text-white mb-2">450M+</p>
               <p className="text-green-400 text-xs font-bold flex items-center gap-1">
-                <svg className="w-3 h-3 fill-current" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" /></svg> Real-time Verified
+                <svg className="w-3 h-3 fill-current" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" /></svg> {t('home.realTimeVerified')}
               </p>
             </div>
 
             <div className="bg-gray-800/50 backdrop-blur border border-gray-700 p-6 rounded-2xl relative overflow-hidden group hover:border-green-500/50 transition-colors">
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-green-500 rounded-r-lg"></div>
               <div className="flex justify-between items-start mb-2">
-                <p className="text-gray-400 text-sm font-medium">Network Uptime</p>
+                <p className="text-gray-400 text-sm font-medium">{t('home.networkUptime')}</p>
                 <span className="text-green-500">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -304,7 +296,7 @@ export default function Home() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                 </span>
-                Zero Downtime Recorded
+                {t('home.zeroDowntime')}
               </p>
             </div>
           </div>
@@ -314,10 +306,10 @@ export default function Home() {
       {/* Verification Section (Hidden by default or scrolled to) */}
       <section ref={verificationRef} className="py-24 bg-gray-900 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className={`transition-all duration-700 transform ${showVerification ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-50'}`}>
+            <div className={`transition-all duration-700 transform ${showVerification ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-50'}`}>
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-white mb-4">Verify Your Identity to Vote</h2>
-              <p className="text-gray-400">Enter your official EPIC details to access the secure voting terminal.</p>
+              <h2 className="text-3xl font-bold text-white mb-4">{t('home.verifyIdentity')}</h2>
+              <p className="text-gray-400">{t('home.verifySubtitle')}</p>
             </div>
 
             <div className="bg-gray-800 rounded-2xl p-1 shadow-2xl border border-gray-700">

@@ -198,14 +198,49 @@ export async function castVote(params: {
   
   // Verify signer has an account
   const signerAddress = await signer.getAddress()
+  
+  // Get current network info for debugging and error messages
+  const currentNetwork = await provider.getNetwork()
+  const currentChainId = currentNetwork.chainId
+  console.log('Current network:', {
+    chainId: currentChainId.toString(),
+    name: currentNetwork.name || 'Unknown'
+  })
   console.log('Signer address:', signerAddress)
   
   // Check balance
   const balance = await provider.getBalance(signerAddress)
-  console.log('Signer balance:', ethers.formatEther(balance), 'ETH')
+  const balanceInEth = ethers.formatEther(balance)
+  console.log('Signer balance:', balanceInEth, 'ETH')
   
   if (balance === BigInt(0)) {
-    throw new Error('Your MetaMask account has no ETH. Please import a funded test account.\nRun: node scripts/get-test-accounts.js')
+    // Use the network info we already fetched
+    const isSepolia = currentChainId === SEPOLIA_CHAIN_ID
+    const isLocalHardhat = currentChainId === BigInt(31337)
+    
+    if (isSepolia) {
+      throw new Error(
+        'Your MetaMask account has no Sepolia ETH. Please get Sepolia ETH from a faucet:\n' +
+        '1. Visit: https://sepoliafaucet.com/\n' +
+        '2. Or: https://www.infura.io/faucet/sepolia\n' +
+        '3. Enter your wallet address: ' + signerAddress + '\n' +
+        '4. Request test ETH\n' +
+        '5. Wait for confirmation and try again'
+      )
+    } else if (isLocalHardhat) {
+      throw new Error(
+        'Your MetaMask account has no ETH. Please import a funded test account.\n' +
+        'Run: node scripts/get-test-accounts.js\n' +
+        'Then import one of the private keys into MetaMask'
+      )
+    } else {
+      throw new Error(
+        'Your MetaMask account has no ETH for gas fees on the current network.\n' +
+        'Network: Chain ID ' + currentChainId.toString() + '\n' +
+        'Account: ' + signerAddress + '\n' +
+        'Please add ETH to this account on this network.'
+      )
+    }
   }
 
   const contractAddress = ethers.getAddress(VOTING_CONTRACT_ADDRESS)
@@ -279,9 +314,10 @@ export async function castVote(params: {
   if (epicHash === BigInt(0)) {
     throw new Error('Invalid EPIC number hash')
   }
-  if (candidateId === BigInt(0)) {
-    throw new Error('Invalid candidate ID')
-  }
+  // Allow candidate ID 0 for NOTA (None of the Above)
+  // if (candidateId === BigInt(0)) {
+  //   throw new Error('Invalid candidate ID')
+  // }
   if (wardId === BigInt(0)) {
     throw new Error('Invalid ward ID')
   }
@@ -345,8 +381,18 @@ export async function castVote(params: {
       throw new Error('This EPIC number has already voted. Each voter can only vote once.')
     }
     
-    // Check for invalid candidate errors
+    // Check for invalid candidate errors (but allow NOTA which uses candidate ID 0)
     if (errorMessage.includes('Invalid candidate') || errorMessage.includes('Invalid EPIC')) {
+      // If voting for NOTA (candidate ID 0), this might mean contract needs redeployment
+      if (params.candidateId === BigInt(0) || params.candidateId === 0) {
+        throw new Error(
+          'NOTA voting requires contract redeployment. Please:\n' +
+          '1. Stop Hardhat node (if running)\n' +
+          '2. Run: npm run deploy:local\n' +
+          '3. Restart your dev server\n' +
+          '4. Try voting again'
+        )
+      }
       throw new Error('Invalid vote parameters. Please check your selection and try again.')
     }
     

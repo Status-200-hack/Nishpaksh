@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface ConnectWalletProps {
     onConnect?: (account: string) => void
 }
 
 export default function ConnectWallet({ onConnect }: ConnectWalletProps) {
+    const { t } = useLanguage()
     const [account, setAccount] = useState<string | null>(null)
 
     const connectWallet = async () => {
@@ -22,7 +24,7 @@ export default function ConnectWallet({ onConnect }: ConnectWalletProps) {
                 console.error('Error connecting to MetaMask', error)
             }
         } else {
-            alert('MetaMask is not installed. Please install it to use this feature.')
+            alert(t('wallet.metaMaskNotInstalled'))
         }
     }
 
@@ -34,7 +36,7 @@ export default function ConnectWallet({ onConnect }: ConnectWalletProps) {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
+            {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : t('wallet.connectWallet')}
         </button>
     )
 }

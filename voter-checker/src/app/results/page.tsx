@@ -4,9 +4,12 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { getVotingStats, getTransactionDetails, formatTimestamp, VoteTransaction, getPartyVoteData, getGenderDistribution, getAgeDistribution, PartyVoteData, GenderDistribution, AgeDistribution } from '@/services/resultsService'
+import { getVotingStats, getTransactionDetails, formatTimestamp, VoteTransaction, getPartyVoteData, getGenderDistribution, getAgeDistribution, getNotaVoteCount, PartyVoteData, GenderDistribution, AgeDistribution } from '@/services/resultsService'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function ResultsPage() {
+    const { t } = useLanguage()
     const router = useRouter()
     const [isAutoRefresh, setIsAutoRefresh] = useState(true)
     const [account, setAccount] = useState<string | null>(null)
@@ -21,6 +24,7 @@ export default function ResultsPage() {
     const [partyData, setPartyData] = useState<PartyVoteData[]>([])
     const [genderData, setGenderData] = useState<GenderDistribution>({ male: 0, female: 0, other: 0 })
     const [ageData, setAgeData] = useState<AgeDistribution[]>([])
+    const [notaCount, setNotaCount] = useState<number>(0)
     const [networkName, setNetworkName] = useState<string>('Loading...')
     const [error, setError] = useState<string | null>(null)
 
@@ -107,11 +111,12 @@ export default function ResultsPage() {
                 }
             }
             
-            const [votingStats, parties, gender, age] = await Promise.all([
+            const [votingStats, parties, gender, age, nota] = await Promise.all([
                 getVotingStats(),
                 getPartyVoteData(),
                 getGenderDistribution(),
                 getAgeDistribution(),
+                getNotaVoteCount(),
             ])
             
             // Calculate total votes from party data (to sync with Current Vote Count)
@@ -128,6 +133,7 @@ export default function ResultsPage() {
             setPartyData(parties)
             setGenderData(gender)
             setAgeData(age)
+            setNotaCount(nota)
         } catch (err: any) {
             console.error('Error fetching stats:', err)
             setError(err.message || 'Failed to fetch voting statistics')
@@ -147,8 +153,8 @@ export default function ResultsPage() {
                         </svg>
                     </div>
                     <div>
-                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">Nishpaksh</span>
-                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">DIGITAL INDIA INITIATIVE</p>
+                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">{t('common.appName')}</span>
+                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">{t('common.tagline')}</p>
                     </div>
                 </div>
 
@@ -159,16 +165,16 @@ export default function ResultsPage() {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                 </svg>
-                                <span className="font-semibold">Secure Voting</span>
+                                <span className="font-semibold">{t('dashboard.secureVoting')}</span>
                             </div>
-                            <span className="text-xs text-gray-400 ml-8">Status: Connected</span>
+                            <span className="text-xs text-gray-400 ml-8">{t('dashboard.statusConnected')}</span>
                         </div>
 
                         <Link href="/results" className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
-                            Results
+                            {t('nav.results')}
                         </Link>
                     </div>
                 </nav>
@@ -177,22 +183,22 @@ export default function ResultsPage() {
                     <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                            <span className="text-xs font-bold text-green-500 tracking-wider">BLOCKCHAIN LIVE</span>
+                            <span className="text-xs font-bold text-green-500 tracking-wider">{t('dashboard.blockchainLive')}</span>
                         </div>
                         <p className="text-xs text-gray-400 leading-relaxed">
-                            Real-time vote counting from blockchain.
+                            {t('results.realTimeCounting')}
                         </p>
                     </div>
                 </div>
 
                 <div className="p-4 border-t border-gray-800">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Network Info</h3>
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">{t('dashboard.networkInfo')}</h3>
                     <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-400">Block Height</span>
+                        <span className="text-gray-400">{t('dashboard.blockHeight')}</span>
                         <span className="text-gray-300 font-mono">#{stats.blockHeight.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                        <span className="text-gray-400">Network</span>
+                        <span className="text-gray-400">{t('results.network')}</span>
                         <span className="text-gray-300 font-mono">{networkName}</span>
                     </div>
                 </div>
@@ -211,14 +217,15 @@ export default function ResultsPage() {
                     </div>
                     <div className="flex items-center gap-4 md:gap-6">
                         <nav className="hidden md:flex gap-6 text-sm font-medium text-gray-400">
-                            <Link href="/results" className="text-white hover:text-white transition-colors">Results</Link>
+                            <Link href="/results" className="text-white hover:text-white transition-colors">{t('nav.results')}</Link>
                         </nav>
                         <div className="h-4 w-px bg-gray-700 hidden md:block"></div>
+                        <LanguageSwitcher />
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
                                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
                                 <span className="text-xs font-mono text-gray-300">
-                                    {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not Connected'}
+                                    {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : t('wallet.notConnected')}
                                 </span>
                             </div>
                             <div className="w-8 h-8 rounded-full bg-orange-200 border-2 border-orange-300"></div>
@@ -232,18 +239,18 @@ export default function ResultsPage() {
                         <div className="mb-8">
                             {lastTx && (
                                 <div className="mb-4 bg-blue-950/40 border border-blue-900/40 rounded-xl p-4">
-                                    <div className="text-xs font-bold tracking-wider text-blue-300 mb-1">LAST VOTE TRANSACTION</div>
+                                    <div className="text-xs font-bold tracking-wider text-blue-300 mb-1">{t('results.lastVoteTransaction')}</div>
                                     <div className="font-mono text-sm text-blue-200 break-all">{lastTx}</div>
                                 </div>
                             )}
                             <div className="flex items-center gap-2 text-blue-400 text-xs font-bold tracking-wider mb-2">
                                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                                LIVE BLOCKCHAIN FEED
+                                {t('results.liveBlockchainFeed')}
                             </div>
                             <div className="flex justify-between items-end">
                                 <div>
-                                    <h1 className="text-3xl font-bold text-white mb-2">Voting Results & Transparency</h1>
-                                    <p className="text-gray-400">Real-time vote counts and transaction history from the blockchain.</p>
+                                    <h1 className="text-3xl font-bold text-white mb-2">{t('results.votingResults')}</h1>
+                                    <p className="text-gray-400">{t('results.subtitle')}</p>
                                 </div>
                                 <button
                                     onClick={fetchStats}
@@ -253,25 +260,25 @@ export default function ResultsPage() {
                                     <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
-                                    {loading ? 'Refreshing...' : 'Refresh'}
+                                    {loading ? t('results.refreshing') : t('common.refresh')}
                                 </button>
                             </div>
                         </div>
 
                         {error && (
                             <div className="mb-6 bg-red-950/30 border border-red-900/40 rounded-xl p-4">
-                                <div className="text-red-300 font-semibold mb-1">Error Loading Data</div>
+                                <div className="text-red-300 font-semibold mb-1">{t('results.errorLoadingData')}</div>
                                 <div className="text-sm text-red-200">{error}</div>
-                                <div className="text-xs text-red-400 mt-2">Make sure MetaMask is connected to Hardhat Local network</div>
+                                <div className="text-xs text-red-400 mt-2">{t('results.makeSureMetaMask')}</div>
                             </div>
                         )}
 
                         {/* Stats Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
                             {/* Total Votes */}
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 relative overflow-hidden group hover:border-gray-600 transition-all">
                                 <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Votes Cast</h3>
+                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('results.totalVotesCast')}</h3>
                                     <div className="text-blue-500">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -282,15 +289,34 @@ export default function ResultsPage() {
                                     {loading ? '...' : stats.totalVotes.toString()}
                                 </div>
                                 <div className="text-xs text-green-500 font-medium">
-                                    {stats.recentTransactions.length > 0 ? `+${stats.recentTransactions.length} recent` : 'No votes yet'}
+                                    {stats.recentTransactions.length > 0 ? `+${stats.recentTransactions.length} ${t('results.recent')}` : t('results.noVotesYet')}
                                 </div>
                                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-transparent opacity-50"></div>
+                            </div>
+
+                            {/* NOTA Votes */}
+                            <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 relative overflow-hidden group hover:border-gray-600 transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('dashboard.noneOfAbove')}</h3>
+                                    <div className="text-gray-500">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-bold text-white mb-2">
+                                    {loading ? '...' : notaCount}
+                                </div>
+                                <div className="text-xs text-gray-500 font-medium italic">
+                                    {t('dashboard.rejectAll')}
+                                </div>
+                                <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-gray-500 to-transparent opacity-50"></div>
                             </div>
 
                             {/* Block Height */}
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 relative overflow-hidden group hover:border-gray-600 transition-all">
                                 <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">Block Height</h3>
+                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('results.blockHeight')}</h3>
                                     <div className="text-teal-500">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -307,7 +333,7 @@ export default function ResultsPage() {
                             {/* Total Candidates */}
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 relative overflow-hidden group hover:border-gray-600 transition-all">
                                 <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">Candidates</h3>
+                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('results.candidates')}</h3>
                                     <div className="text-orange-500">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -317,14 +343,14 @@ export default function ResultsPage() {
                                 <div className="text-3xl font-bold text-white mb-2">
                                     {loading ? '...' : stats.totalCandidates}
                                 </div>
-                                <div className="text-xs text-gray-500 font-medium italic">Unique candidates voted</div>
+                                <div className="text-xs text-gray-500 font-medium italic">{t('results.uniqueCandidatesVoted')}</div>
                                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-transparent opacity-50"></div>
                             </div>
 
                             {/* Recent Activity */}
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 relative overflow-hidden group hover:border-gray-600 transition-all">
                                 <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">Recent Votes</h3>
+                                    <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider">{t('results.recentVotes')}</h3>
                                     <div className="text-purple-500">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -334,7 +360,7 @@ export default function ResultsPage() {
                                 <div className="text-3xl font-bold text-white mb-2">
                                     {loading ? '...' : stats.recentTransactions.length}
                                 </div>
-                                <div className="text-xs text-gray-500 font-medium italic">Last 20 transactions</div>
+                                <div className="text-xs text-gray-500 font-medium italic">{t('results.last20Transactions')}</div>
                                 <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-transparent opacity-50"></div>
                             </div>
                         </div>
@@ -344,8 +370,8 @@ export default function ResultsPage() {
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 mb-8">
                                 <div className="flex items-center justify-between mb-6">
                                     <div>
-                                        <h2 className="text-2xl font-bold text-white mb-1">Current Vote Count</h2>
-                                        <p className="text-gray-400 text-sm">Votes cast by party</p>
+                                        <h2 className="text-2xl font-bold text-white mb-1">{t('results.currentVoteCount')}</h2>
+                                        <p className="text-gray-400 text-sm">{t('results.votesCastByParty')}</p>
                                     </div>
                                     <div className="flex items-center gap-4 text-xs">
                                         {partyData.slice(0, 4).map((party, idx) => (
@@ -373,10 +399,10 @@ export default function ResultsPage() {
                                                     <div className="flex items-center gap-3">
                                                         <span className="text-white font-semibold">{party.partyName}</span>
                                                         {isLeading && (
-                                                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs font-bold rounded">LEADING</span>
+                                                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs font-bold rounded">{t('results.leading')}</span>
                                                         )}
                                                     </div>
-                                                    <span className="text-white font-bold">{party.votes} votes</span>
+                                                    <span className="text-white font-bold">{party.votes} {t('results.votes')}</span>
                                                 </div>
                                                 <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
                                                     <div
@@ -395,7 +421,7 @@ export default function ResultsPage() {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                             {/* Gender Distribution Pie Chart */}
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-6">Vote Share %</h3>
+                                <h3 className="text-lg font-semibold text-white mb-6">{t('results.voteShare')}</h3>
                                 {loading ? (
                                     <div className="flex items-center justify-center h-64">
                                         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -446,14 +472,14 @@ export default function ResultsPage() {
                                                         return '100'
                                                     })()}%
                                                 </div>
-                                                <div className="text-sm text-gray-400">COUNTED</div>
+                                                <div className="text-sm text-gray-400">{t('results.counted')}</div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                                 <div className="grid grid-cols-2 gap-4 mt-6">
                                     <div className="text-center">
-                                        <div className="text-gray-400 text-sm mb-1">MALE</div>
+                                        <div className="text-gray-400 text-sm mb-1">{t('voterDetails.male').toUpperCase()}</div>
                                         <div className="text-white text-xl font-semibold">
                                             {(() => {
                                                 const genderTotal = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
@@ -464,7 +490,7 @@ export default function ResultsPage() {
                                         </div>
                                     </div>
                                     <div className="text-center">
-                                        <div className="text-gray-400 text-sm mb-1">FEMALE</div>
+                                        <div className="text-gray-400 text-sm mb-1">{t('voterDetails.female').toUpperCase()}</div>
                                         <div className="text-white text-xl font-semibold">
                                             {(() => {
                                                 const genderTotal = (genderData.male || 0) + (genderData.female || 0) + (genderData.other || 0)
@@ -479,7 +505,7 @@ export default function ResultsPage() {
 
                             {/* Age Distribution Bar Chart */}
                             <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-6">Voter Age Distribution</h3>
+                                <h3 className="text-lg font-semibold text-white mb-6">{t('results.voterAgeDistribution')}</h3>
                                 {loading ? (
                                     <div className="flex items-center justify-center h-64">
                                         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -524,9 +550,9 @@ export default function ResultsPage() {
                         {/* Transactions Table */}
                         <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
                             <div className="p-6 border-b border-gray-700 flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-white">Recent Vote Transactions</h3>
+                                <h3 className="text-lg font-semibold text-white">{t('results.recentVoteTransactions')}</h3>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-500 font-medium">Auto-refresh</span>
+                                    <span className="text-xs text-gray-500 font-medium">{t('results.autoRefresh')}</span>
                                     <button
                                         onClick={() => setIsAutoRefresh(!isAutoRefresh)}
                                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isAutoRefresh ? 'bg-blue-600' : 'bg-gray-700'}`}
@@ -539,16 +565,16 @@ export default function ResultsPage() {
                             {loading && stats.recentTransactions.length === 0 ? (
                                 <div className="p-12 text-center">
                                     <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                                    <p className="text-gray-400">Loading transactions...</p>
+                                    <p className="text-gray-400">{t('results.loadingTransactions')}</p>
                                 </div>
                             ) : stats.recentTransactions.length === 0 ? (
                                 <div className="p-12 text-center">
                                     <svg className="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
-                                    <p className="text-gray-400 mb-2">No votes cast yet</p>
+                                    <p className="text-gray-400 mb-2">{t('results.noVotesCastYet')}</p>
                                     <Link href="/dashboard" className="text-blue-400 hover:text-blue-300 text-sm">
-                                        Go to Dashboard to cast your vote →
+                                        {t('results.goToDashboard')}
                                     </Link>
                                 </div>
                             ) : (
@@ -556,13 +582,13 @@ export default function ResultsPage() {
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-gray-900 text-gray-500 text-xs uppercase tracking-wider font-semibold">
                                             <tr>
-                                                <th className="px-6 py-4">TX Hash</th>
-                                                <th className="px-6 py-4">Block</th>
-                                                <th className="px-6 py-4">Timestamp</th>
-                                                <th className="px-6 py-4">Voter</th>
-                                                <th className="px-6 py-4">Candidate ID</th>
-                                                <th className="px-6 py-4">Ward</th>
-                                                <th className="px-6 py-4">Status</th>
+                                                <th className="px-6 py-4">{t('results.txHash')}</th>
+                                                <th className="px-6 py-4">{t('results.block')}</th>
+                                                <th className="px-6 py-4">{t('results.timestamp')}</th>
+                                                <th className="px-6 py-4">{t('results.voter')}</th>
+                                                <th className="px-6 py-4">{t('results.candidateId')}</th>
+                                                <th className="px-6 py-4">{t('results.ward')}</th>
+                                                <th className="px-6 py-4">{t('results.status')}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-700/50">
@@ -586,7 +612,7 @@ export default function ResultsPage() {
                                                     <td className="px-6 py-4">
                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-900 ${tx.status === 'Verified' ? 'text-green-500' : 'text-blue-400'} border border-gray-700/50`}>
                                                             <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${tx.status === 'Verified' ? 'bg-green-500' : 'bg-blue-400'}`}></span>
-                                                            {tx.status}
+                                                            {tx.status === 'Verified' ? t('results.verified') : tx.status}
                                                         </span>
                                                     </td>
                                                 </tr>

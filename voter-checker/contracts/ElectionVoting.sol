@@ -22,17 +22,25 @@ contract ElectionVoting {
 
     /// @dev Vote function - checks EPIC number hash instead of wallet address
     /// @param _epicHash Hash of the EPIC number (to ensure one vote per EPIC)
-    /// @param _candidateId ID of the candidate being voted for
+    /// @param _candidateId ID of the candidate being voted for (0 = NOTA)
     /// @param _wardId Ward number where the vote is being cast
     function vote(uint256 _epicHash, uint256 _candidateId, uint256 _wardId) external {
         require(!hasVotedByEpic[_epicHash], "This EPIC number has already voted");
-        require(_candidateId != 0, "Invalid candidate");
         require(_epicHash != 0, "Invalid EPIC hash");
+        // Allow candidate ID 0 for NOTA (None of the Above)
+        // No need to check _candidateId != 0 anymore
 
         // If candidate wasn't set, still allow voting but keep name empty.
+        // For NOTA (candidateId = 0), we still track it
         Candidate storage c = candidates[_candidateId];
-        if (c.id == 0) {
+        if (c.id == 0 && _candidateId != 0) {
             c.id = _candidateId;
+        } else if (_candidateId == 0) {
+            // Initialize NOTA candidate if not already set
+            if (c.id == 0) {
+                c.id = 0;
+                c.name = "NOTA";
+            }
         }
         c.voteCount += 1;
 

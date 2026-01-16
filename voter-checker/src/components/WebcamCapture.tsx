@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface WebcamCaptureProps {
   voterId: string
@@ -11,6 +12,7 @@ interface WebcamCaptureProps {
 }
 
 export default function WebcamCapture({ voterId, fullName, mode, onComplete, onError }: WebcamCaptureProps) {
+  const { t } = useLanguage()
   const [consentGiven, setConsentGiven] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
   const [capturing, setCapturing] = useState(false)
@@ -94,10 +96,10 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
       
       attachStream()
     } catch (err: any) {
-      const errorMsg = 'Failed to access camera. Please ensure you have granted camera permissions.'
+      const errorMsg = t('webcam.cameraAccessDenied')
       setError(errorMsg)
       console.error('Camera access error:', err)
-      onError('Camera access denied or unavailable')
+      onError(t('webcam.cameraAccessDenied'))
     }
   }
 
@@ -114,13 +116,13 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
 
   const captureImage = async () => {
     if (!videoRef.current || !cameraActive) {
-      setError('Camera is not ready')
+      setError(t('webcam.cameraNotReady'))
       return
     }
 
     // Wait for video to be ready
     if (videoRef.current.readyState < 2) {
-      setError('Video is not ready. Please wait...')
+      setError(t('webcam.videoNotReady'))
       return
     }
 
@@ -219,22 +221,22 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
           <div className="text-3xl">📷</div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-blue-900 mb-2">
-              {mode === 'register' ? 'Register Your Face' : 'Verify Your Face'}
+              {mode === 'register' ? t('webcam.registerYourFace') : t('webcam.verifyYourFace')}
             </h3>
             <p className="text-blue-800 mb-4">
               {mode === 'register' 
-                ? 'To register your face for verification, we need access to your camera to capture a photo.'
-                : 'To verify your identity, we need access to your camera to capture a photo.'}
+                ? t('webcam.registerDescription')
+                : t('webcam.verifyDescription')}
             </p>
             <div className="bg-white rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-700 mb-2">
-                <strong>What we'll do:</strong>
+                <strong>{t('webcam.whatWellDo')}</strong>
               </p>
               <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-                <li>Access your device camera</li>
-                <li>Capture a single photo of your face</li>
-                <li>Process the image for {mode === 'register' ? 'registration' : 'verification'}</li>
-                <li>Camera will be closed immediately after capture</li>
+                <li>{t('webcam.accessCamera')}</li>
+                <li>{t('webcam.capturePhotoDescription')}</li>
+                <li>{t('webcam.processImage')} {mode === 'register' ? t('webcam.registration') : t('webcam.verification')}</li>
+                <li>{t('webcam.closeAfterCapture')}</li>
               </ul>
             </div>
             <div className="flex gap-3">
@@ -242,13 +244,13 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
                 onClick={handleConsent}
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
               >
-                Allow Camera Access
+                {t('webcam.allowCameraAccess')}
               </button>
               <button
-                onClick={() => onError('Camera access cancelled by user')}
+                onClick={() => onError(t('webcam.cameraAccessCancelled'))}
                 className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -260,7 +262,7 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
   return (
     <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        {mode === 'register' ? '📷 Register Your Face' : '🔍 Verify Your Face'}
+        {mode === 'register' ? `📷 ${t('webcam.registerYourFace')}` : `🔍 ${t('webcam.verifyYourFace')}`}
       </h3>
 
       {error && (
@@ -271,12 +273,12 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
 
       {!cameraActive && !processing && !streamRef.current && (
         <div className="text-center py-8">
-          <p className="text-gray-600 mb-4">Camera is not active</p>
+          <p className="text-gray-600 mb-4">{t('webcam.cameraNotActive')}</p>
           <button
             onClick={startCamera}
             className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
           >
-            Start Camera
+            {t('webcam.startCamera')}
           </button>
         </div>
       )}
@@ -312,8 +314,8 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
             {!streamRef.current && !cameraActive && (
               <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
                 <div className="text-white text-center">
-                  <p className="mb-2">Camera feed will appear here</p>
-                  <p className="text-sm text-gray-400">Click "Start Camera" to begin</p>
+                  <p className="mb-2">{t('webcam.cameraFeed')}</p>
+                  <p className="text-sm text-gray-400">{t('webcam.clickStartCamera')}</p>
                 </div>
               </div>
             )}
@@ -326,14 +328,14 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
                 disabled={capturing || processing}
                 className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {capturing ? 'Capturing...' : processing ? 'Processing...' : 'Capture Photo'}
+                {capturing ? t('webcam.capturing') : processing ? t('webcam.processing') : t('webcam.capturePhoto')}
               </button>
               <button
                 onClick={stopCamera}
                 disabled={capturing || processing}
                 className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           ) : (
@@ -342,7 +344,7 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
                 onClick={startCamera}
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
               >
-                Start Camera
+                {t('webcam.startCamera')}
               </button>
             </div>
           )}
@@ -353,7 +355,7 @@ export default function WebcamCapture({ voterId, fullName, mode, onComplete, onE
         <div className="text-center py-8">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
           <p className="text-gray-600">
-            {mode === 'register' ? 'Registering your face...' : 'Verifying your face...'}
+            {mode === 'register' ? t('webcam.registeringFace') : t('webcam.verifyingFace')}
           </p>
         </div>
       )}

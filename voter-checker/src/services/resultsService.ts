@@ -442,3 +442,25 @@ export async function getAgeDistribution(): Promise<AgeDistribution[]> {
   return ageRanges
 }
 
+// Get NOTA (None of the Above) vote count
+export async function getNotaVoteCount(): Promise<number> {
+  const provider = await getProvider()
+  const contract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, provider)
+  
+  const filter = contract.filters.VoteCasted()
+  const blockNumber = await provider.getBlockNumber()
+  const events = await contract.queryFilter(filter, Math.max(0, blockNumber - 10000), 'latest')
+  
+  // Count votes where candidateId is 0 (NOTA)
+  let notaCount = 0
+  events.forEach((event) => {
+    const eventLog = event as ethers.EventLog
+    const candidateId = eventLog.args[2] as bigint // candidateId is at index 2
+    if (candidateId === BigInt(0)) {
+      notaCount++
+    }
+  })
+  
+  return notaCount
+}
+

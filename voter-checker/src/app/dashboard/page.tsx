@@ -6,6 +6,9 @@ import Image from 'next/image'
 import { castVote, checkEpicVotedStatus } from '@/services/votingService'
 import { useOfflineVoting } from '@/hooks/useOfflineVoting'
 import { fetchWithCache } from '@/utils/fetchWithCache'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
+import { useLanguage } from '@/contexts/LanguageContext'
+import { translateCandidateName } from '@/utils/candidateTranslations'
 
 // Helper function to update aggregated voter demographics
 function updateVoterDemographics(gender: string | null, age: number | null) {
@@ -53,6 +56,7 @@ interface Candidate {
 }
 
 export default function Dashboard() {
+    const { t, languageCode: language } = useLanguage()
     const router = useRouter()
     const [account, setAccount] = useState<string | null>(null)
     const [candidates, setCandidates] = useState<Candidate[]>([])
@@ -320,12 +324,12 @@ export default function Dashboard() {
         if (!selectedCandidate) return
         if (!wardNoState) {
             setVoteStep('error')
-            setVoteError('Ward not detected yet. Please refresh and try again.')
+            setVoteError(t('dashboard.wardNotDetected'))
             return
         }
         if (!epicNumber) {
             setVoteStep('error')
-            setVoteError('EPIC number not found. Please verify your voter ID first.')
+            setVoteError(t('dashboard.epicNotFoundForVote'))
             return
         }
 
@@ -334,9 +338,12 @@ export default function Dashboard() {
         setTxHash(null)
 
         try {
+            // Use 0 as candidate ID for NOTA
+            const candidateId = selectedCandidate.id === 'NOTA' ? 0 : selectedCandidate.id
+            
             const result = await castVote({
                 epicNumber: epicNumber,
-                candidateId: selectedCandidate.id,
+                candidateId: candidateId,
                 wardId: wardNoState,
                 candidateName: selectedCandidate.candidate_name,
             })
@@ -514,13 +521,13 @@ export default function Dashboard() {
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <div>
                                 <h2 className="text-xl font-bold text-white">
-                                    {voteStep === 'confirm' && 'Confirm your vote'}
-                                    {voteStep === 'mining' && 'Confirming on Blockchain...'}
-                                    {voteStep === 'success' && 'Vote Casted!'}
-                                    {voteStep === 'error' && 'Vote failed'}
+                                    {voteStep === 'confirm' && t('dashboard.confirmYourVote')}
+                                    {voteStep === 'mining' && t('dashboard.confirmingOnBlockchain')}
+                                    {voteStep === 'success' && t('dashboard.voteCasted')}
+                                    {voteStep === 'error' && t('dashboard.voteFailed')}
                                 </h2>
                                 <p className="text-sm text-gray-400 mt-1">
-                                    Ward: <span className="text-gray-200 font-semibold">{wardNoState ?? '...'}</span>
+                                    {t('dashboard.ward')} <span className="text-gray-200 font-semibold">{wardNoState ?? '...'}</span>
                                 </p>
                             </div>
                             <button
@@ -538,9 +545,18 @@ export default function Dashboard() {
                         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <div className="text-white font-semibold">{selectedCandidate.candidate_name}</div>
-                                    <div className="text-sm text-blue-400">{selectedCandidate.party_name}</div>
-                                    <div className="text-xs text-gray-500 mt-1">Symbol: {selectedCandidate.symbol}</div>
+                                    <div className="text-white font-semibold">
+                                        {selectedCandidate.id === 'NOTA' 
+                                            ? t('dashboard.noneOfAbove')
+                                            : translateCandidateName(selectedCandidate.candidate_name, selectedCandidate.id, language)
+                                        }
+                                    </div>
+                                    <div className="text-sm text-blue-400">
+                                        {selectedCandidate.id === 'NOTA' ? 'NOTA' : selectedCandidate.party_name}
+                                    </div>
+                                    {selectedCandidate.id !== 'NOTA' && (
+                                        <div className="text-xs text-gray-500 mt-1">Symbol: {selectedCandidate.symbol}</div>
+                                    )}
                                 </div>
                                 <div className="text-3xl">
                                     {getSymbolImagePath(
@@ -569,11 +585,11 @@ export default function Dashboard() {
                         {voteStep === 'confirm' && (
                             <div className="text-sm text-gray-400 mb-4">
                                 {isOnline ? (
-                                    <>Clicking <span className="text-white font-semibold">Confirm & Sign</span> will open MetaMask to sign and pay gas.</>
+                                    <>{t('dashboard.clickingConfirm')} <span className="text-white font-semibold">{t('dashboard.confirmSign')}</span> {t('dashboard.willOpenMetaMask')}</>
                                 ) : (
                                     <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-3 text-yellow-200">
-                                        <div className="font-semibold mb-1">⚠️ You are currently offline</div>
-                                        <div className="text-xs">Your vote will be saved locally and automatically submitted when your connection is restored.</div>
+                                        <div className="font-semibold mb-1">{t('dashboard.youAreOffline')}</div>
+                                        <div className="text-xs">{t('dashboard.voteSavedLocally')}</div>
                                     </div>
                                 )}
                             </div>
@@ -583,17 +599,17 @@ export default function Dashboard() {
                             <div className="space-y-2 mb-4">
                                 <div className="flex items-center gap-3 text-sm text-gray-300">
                                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                    Waiting for transaction confirmation...
+                                    {t('dashboard.waitingForConfirmation')}
                                 </div>
                                 <div className="text-xs text-yellow-400 bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-2">
-                                    <strong>Important:</strong> Check MetaMask popup! If you don't see it, click the MetaMask extension icon. Click "Confirm" to approve the transaction.
+                                    <strong>{t('dashboard.important')}</strong> {t('dashboard.checkMetaMask')}
                                 </div>
                             </div>
                         )}
 
                         {voteStep === 'success' && txHash && (
                             <div className="text-sm text-gray-300 mb-4">
-                                <div className="text-green-400 font-semibold mb-1">Transaction confirmed</div>
+                                <div className="text-green-400 font-semibold mb-1">{t('dashboard.transactionConfirmed')}</div>
                                 <div className="font-mono break-all bg-gray-950/40 border border-gray-800 rounded-lg p-3">
                                     {txHash}
                                 </div>
@@ -606,10 +622,10 @@ export default function Dashboard() {
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    Vote queued for offline sync
+                                    {t('dashboard.voteQueued')}
                                 </div>
                                 <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-3 text-yellow-200">
-                                    Your vote has been saved locally and will be automatically submitted to the blockchain when your connection is restored.
+                                    {t('dashboard.voteSavedForSync')}
                                 </div>
                             </div>
                         )}
@@ -627,13 +643,13 @@ export default function Dashboard() {
                                         className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
                                         onClick={closeVoteModal}
                                     >
-                                        Cancel
+                                        {t('common.cancel')}
                                     </button>
                                     <button
                                         className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
                                         onClick={confirmAndSignVote}
                                     >
-                                        Confirm & Sign
+                                        {t('dashboard.confirmSign')}
                                     </button>
                                 </>
                             )}
@@ -643,7 +659,7 @@ export default function Dashboard() {
                                     className="px-4 py-2 rounded-lg bg-blue-600/60 text-white font-semibold cursor-not-allowed"
                                     disabled
                                 >
-                                    Confirming...
+                                    {t('dashboard.confirming')}
                                 </button>
                             )}
 
@@ -652,7 +668,7 @@ export default function Dashboard() {
                                     className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
                                     onClick={() => router.push(`/results${txHash ? `?tx=${encodeURIComponent(txHash)}` : ''}`)}
                                 >
-                                    View Results
+                                    {t('dashboard.viewResults')}
                                 </button>
                             )}
 
@@ -661,7 +677,7 @@ export default function Dashboard() {
                                     className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
                                     onClick={() => setVoteStep('confirm')}
                                 >
-                                    Back
+                                    {t('common.back')}
                                 </button>
                             )}
                         </div>
@@ -678,8 +694,8 @@ export default function Dashboard() {
                         </svg>
                     </div>
                     <div>
-                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">Nishpaksh</span>
-                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">DIGITAL INDIA INITIATIVE</p>
+                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">{t('common.appName')}</span>
+                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">{t('common.tagline')}</p>
                     </div>
                 </div>
 
@@ -690,16 +706,16 @@ export default function Dashboard() {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                 </svg>
-                                <span className="font-semibold">Secure Voting</span>
+                                <span className="font-semibold">{t('dashboard.secureVoting')}</span>
                             </div>
-                            <span className="text-xs text-gray-400 ml-8">Status: Connected</span>
+                            <span className="text-xs text-gray-400 ml-8">{t('dashboard.statusConnected')}</span>
                         </div>
 
                         <button className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                             </svg>
-                            Election Ballot
+                            {t('dashboard.electionBallot')}
                         </button>
                     </div>
                 </nav>
@@ -708,22 +724,22 @@ export default function Dashboard() {
                     <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                            <span className="text-xs font-bold text-green-500 tracking-wider">BLOCKCHAIN LIVE</span>
+                            <span className="text-xs font-bold text-green-500 tracking-wider">{t('dashboard.blockchainLive')}</span>
                         </div>
                         <p className="text-xs text-gray-400 leading-relaxed">
-                            Your vote will be encrypted and recorded on-chain.
+                            {t('dashboard.voteEncrypted')}
                         </p>
                     </div>
                 </div>
 
                 <div className="p-4 border-t border-gray-800">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Network Info</h3>
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">{t('dashboard.networkInfo')}</h3>
                     <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-400">Block Height</span>
+                        <span className="text-gray-400">{t('dashboard.blockHeight')}</span>
                         <span className="text-gray-300 font-mono">#18,293,011</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                        <span className="text-gray-400">Gas Price</span>
+                        <span className="text-gray-400">{t('dashboard.gasPrice')}</span>
                         <span className="text-gray-300 font-mono">12 Gwei</span>
                     </div>
                 </div>
@@ -743,9 +759,10 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-4 md:gap-6">
                         <nav className="hidden md:flex gap-6 text-sm font-medium text-gray-400">
-                            <a href="#" className="text-white hover:text-white transition-colors">Dashboard</a>
+                            <a href="#" className="text-white hover:text-white transition-colors">{t('nav.dashboard')}</a>
                         </nav>
                         <div className="h-4 w-px bg-gray-700 hidden md:block"></div>
+                        <LanguageSwitcher />
                         
                         {/* Offline Status & Pending Votes Indicator */}
                         {!isOnline && (
@@ -753,7 +770,7 @@ export default function Dashboard() {
                                 <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
                                 </svg>
-                                <span className="text-xs font-semibold text-yellow-400">Offline</span>
+                                <span className="text-xs font-semibold text-yellow-400">{t('dashboard.offline')}</span>
                             </div>
                         )}
                         
@@ -772,7 +789,7 @@ export default function Dashboard() {
                                 {isSyncing ? (
                                     <>
                                         <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                                        <span className="text-xs font-semibold text-blue-400">Syncing...</span>
+                                        <span className="text-xs font-semibold text-blue-400">{t('dashboard.syncing')}</span>
                                     </>
                                 ) : (
                                     <>
@@ -780,7 +797,7 @@ export default function Dashboard() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                         </svg>
                                         <span className="text-xs font-semibold text-blue-400">
-                                            {pendingCount} pending
+                                            {pendingCount} {t('dashboard.pending')}
                                         </span>
                                     </>
                                 )}
@@ -793,7 +810,7 @@ export default function Dashboard() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span className="text-xs font-semibold text-gray-400">
-                                    {pendingCount} queued
+                                    {pendingCount} {t('dashboard.queued')}
                                 </span>
                             </div>
                         )}
@@ -802,7 +819,7 @@ export default function Dashboard() {
                             <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
                                 <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-500'}`}></div>
                                 <span className="text-xs font-mono text-gray-300">
-                                    {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not Connected'}
+                                    {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : t('wallet.notConnected')}
                                 </span>
                             </div>
                             <div className="w-8 h-8 rounded-full bg-orange-200 border-2 border-orange-300"></div>
@@ -816,22 +833,22 @@ export default function Dashboard() {
                         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                             <div>
                                 <h1 className="text-3xl font-bold text-white mb-2">{wardName}</h1>
-                                <p className="text-gray-400">Step 1 of 2: Select your preferred representative for the blockchain ballot.</p>
+                                <p className="text-gray-400">{t('dashboard.step1of2')}</p>
                                 {epicNumber && (
                                     <div className="mt-2 flex items-center gap-2">
-                                        <span className="text-xs text-gray-500">EPIC: {epicNumber}</span>
+                                        <span className="text-xs text-gray-500">{t('dashboard.epic')} {epicNumber}</span>
                                         {checkingVoteStatus ? (
-                                            <span className="text-xs text-gray-400">Checking vote status...</span>
+                                            <span className="text-xs text-gray-400">{t('dashboard.checkingVoteStatus')}</span>
                                         ) : hasVoted ? (
-                                            <span className="text-xs text-red-400 font-semibold">⚠️ Already Voted</span>
+                                            <span className="text-xs text-red-400 font-semibold">{t('dashboard.alreadyVoted')}</span>
                                         ) : (
-                                            <span className="text-xs text-green-400 font-semibold">✓ Eligible to Vote</span>
+                                            <span className="text-xs text-green-400 font-semibold">{t('dashboard.eligibleToVote')}</span>
                                         )}
                                     </div>
                                 )}
                                 {!epicNumber && (
                                     <div className="mt-2">
-                                        <span className="text-xs text-yellow-400">⚠️ EPIC number not found. Please verify your voter ID first.</span>
+                                        <span className="text-xs text-yellow-400">{t('dashboard.epicNotFound')}</span>
                                     </div>
                                 )}
                             </div>
@@ -849,7 +866,7 @@ export default function Dashboard() {
                             {!loading && candidates.map((candidate, index) => (
                                 <CandidateCard
                                     key={candidate.id}
-                                    name={candidate.candidate_name}
+                                    name={translateCandidateName(candidate.candidate_name, candidate.id, language)}
                                     party={candidate.party_name}
                                     symbol={candidate.symbol}
                                     imageColor={getCardColor(index)}
@@ -865,18 +882,43 @@ export default function Dashboard() {
 
                             {/* NOTA - Always present */}
                             {!loading && (
-                                <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 flex flex-col items-center text-center hover:border-gray-500 transition-all cursor-pointer group h-full justify-between">
+                                <div 
+                                    className="bg-gray-800 rounded-xl p-8 border border-gray-700 flex flex-col items-center text-center hover:border-gray-500 transition-all cursor-pointer group h-full justify-between"
+                                    onClick={() => {
+                                        const notaCandidate: Candidate = {
+                                            id: 'NOTA',
+                                            candidate_name: 'None of the Above',
+                                            party_name: 'NOTA',
+                                            symbol: 'None',
+                                            ward_no: wardNoState || 0,
+                                        }
+                                        openVoteModal(notaCandidate)
+                                    }}
+                                >
                                     <div className="flex flex-col items-center">
                                         <div className="w-24 h-24 rounded-full bg-gray-700 mb-4 flex items-center justify-center group-hover:bg-gray-600 transition-colors">
                                             <svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                                             </svg>
                                         </div>
-                                        <h3 className="text-xl font-bold text-white mb-1">None of the Above</h3>
-                                        <p className="text-sm text-gray-400">Reject all candidates listed in this constituency</p>
+                                        <h3 className="text-xl font-bold text-white mb-1">{t('dashboard.noneOfAbove')}</h3>
+                                        <p className="text-sm text-gray-400">{t('dashboard.rejectAll')}</p>
                                     </div>
-                                    <button className="w-full mt-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-semibold transition-colors">
-                                        Select NOTA
+                                    <button 
+                                        className="w-full mt-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-semibold transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            const notaCandidate: Candidate = {
+                                                id: 'NOTA',
+                                                candidate_name: 'None of the Above',
+                                                party_name: 'NOTA',
+                                                symbol: 'None',
+                                                ward_no: wardNoState || 0,
+                                            }
+                                            openVoteModal(notaCandidate)
+                                        }}
+                                    >
+                                        {t('dashboard.selectNota')}
                                     </button>
                                 </div>
                             )}
@@ -894,8 +936,8 @@ export default function Dashboard() {
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="font-semibold text-white">Encrypted Submission</h4>
-                                <p className="text-sm text-gray-400">Your selection remains anonymous</p>
+                                <h4 className="font-semibold text-white">{t('dashboard.encryptedSubmission')}</h4>
+                                <p className="text-sm text-gray-400">{t('dashboard.selectionAnonymous')}</p>
                             </div>
                         </div>
                     </div>
@@ -924,6 +966,7 @@ function CandidateCard({
     onVote?: () => void
     disabled?: boolean
 }) {
+    const { t } = useLanguage()
     const [imageError, setImageError] = useState(false)
 
     return (
@@ -961,7 +1004,7 @@ function CandidateCard({
                         : 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/20'
                 }`}
             >
-                {disabled ? 'Cannot Vote' : 'Cast Vote'}
+                {disabled ? t('dashboard.cannotVote') : t('dashboard.castVote')}
                 {!disabled && (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

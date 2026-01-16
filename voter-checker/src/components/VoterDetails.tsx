@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import WebcamCapture from './WebcamCapture'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface VoterDetailsProps {
   data: any
 }
 
 export default function VoterDetails({ data }: VoterDetailsProps) {
+  const { t } = useLanguage()
   const router = useRouter()
   const [faceResult, setFaceResult] = useState<any>(null)
   const [faceError, setFaceError] = useState<string | null>(null)
@@ -62,80 +64,80 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
 
   return (
     <div className="mt-8 bg-white rounded-2xl shadow-xl p-8">
-      <div className="border-b border-gray-200 pb-4 mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Voter Details</h2>
-        <p className="text-sm text-gray-600 mt-1">Information from Election Commission of India</p>
+        <div className="border-b border-gray-200 pb-4 mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">{t('voterDetails.title')}</h2>
+        <p className="text-sm text-gray-600 mt-1">{t('voterDetails.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Personal Details */}
         <InfoCard
           icon="👤"
-          label="Full Name"
+          label={t('voterDetails.fullName')}
           value={data.fullName || `${data.applicantFirstName} ${data.applicantLastName}`}
         />
         <InfoCard
           icon="🆔"
-          label="EPIC Number"
+          label={t('voterDetails.epicNumber')}
           value={data.epicNumber}
         />
         <InfoCard
           icon="👨‍👦"
-          label="Relative's Name"
+          label={t('voterDetails.relativesName')}
           value={data.relativeFullName || data.relationName}
         />
         <InfoCard
           icon="🔗"
-          label="Relation Type"
-          value={data.relationType === 'FTHR' ? 'Father' : data.relationType === 'HSBN' ? 'Husband' : data.relationType}
+          label={t('voterDetails.relationType')}
+          value={data.relationType === 'FTHR' ? t('voterDetails.father') : data.relationType === 'HSBN' ? t('voterDetails.husband') : data.relationType}
         />
         <InfoCard
           icon="🎂"
-          label="Age"
+          label={t('voterDetails.age')}
           value={data.age?.toString()}
         />
         <InfoCard
           icon="⚧"
-          label="Gender"
-          value={data.gender === 'M' ? 'Male' : data.gender === 'F' ? 'Female' : data.gender}
+          label={t('voterDetails.gender')}
+          value={data.gender === 'M' ? t('voterDetails.male') : data.gender === 'F' ? t('voterDetails.female') : data.gender}
         />
 
         {/* Location Details */}
         <InfoCard
           icon="📍"
-          label="State"
+          label={t('voterDetails.state')}
           value={data.stateName}
         />
         <InfoCard
           icon="🏙️"
-          label="District"
+          label={t('voterDetails.district')}
           value={data.districtValue}
         />
         <InfoCard
           icon="🏛️"
-          label="Assembly Constituency"
+          label={t('voterDetails.assemblyConstituency')}
           value={`${data.asmblyName} (AC ${data.acNumber})`}
         />
         <InfoCard
           icon="🏢"
-          label="Parliament Constituency"
+          label={t('voterDetails.parliamentConstituency')}
           value={`${data.prlmntName} (${data.prlmntNo})`}
         />
 
         {/* Electoral Details */}
         <InfoCard
           icon="📄"
-          label="Part Number"
+          label={t('voterDetails.partNumber')}
           value={data.partNumber}
         />
         <InfoCard
           icon="#️⃣"
-          label="Serial Number"
+          label={t('voterDetails.serialNumber')}
           value={data.partSerialNumber?.toString()}
         />
         <InfoCard
           icon="🔢"
-          label="Section Number"
+          label={t('voterDetails.sectionNumber')}
           value={data.sectionNo?.toString()}
         />
 
@@ -143,21 +145,21 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
         <div className="md:col-span-2">
           <InfoCard
             icon="🗳️"
-            label="Polling Station"
+            label={t('voterDetails.pollingStation')}
             value={data.psbuildingName}
           />
         </div>
         <div className="md:col-span-2">
           <InfoCard
             icon="📍"
-            label="Polling Station Address"
+            label={t('voterDetails.pollingStationAddress')}
             value={`${data.buildingAddress} - ${data.psRoomDetails}`}
           />
         </div>
         <div className="md:col-span-2">
           <InfoCard
             icon="📮"
-            label="Part Name & Address"
+            label={t('voterDetails.partNameAddress')}
             value={data.partName}
           />
         </div>
@@ -166,14 +168,13 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
       {/* Additional Info */}
       <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
         <p className="text-sm text-blue-800">
-          <strong>Note:</strong> This information is sourced from the Election Commission of India's database.
-          Please verify at the polling station on election day.
+          <strong>{t('voterDetails.note')}</strong> {t('voterDetails.noteText')}
         </p>
       </div>
 
       {/* Face Registration/Verification Section */}
       <div className="mt-8 border-t border-gray-200 pt-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Face Recognition</h3>
+        <h3 className="text-xl font-bold text-gray-900 mb-4">{t('voterDetails.faceRecognition')}</h3>
 
         {!showWebcam && !faceResult && !faceError && (
           <div className="flex gap-3">
@@ -185,7 +186,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
               }}
               className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
             >
-              📷 Register Face
+              📷 {t('voterDetails.registerFace')}
             </button>
             <button
               onClick={() => {
@@ -195,7 +196,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
               }}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
             >
-              🔍 Verify Face
+              🔍 {t('voterDetails.verifyFace')}
             </button>
           </div>
         )}
@@ -217,11 +218,11 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
               <div className="text-3xl">✅</div>
               <div className="flex-1">
                 <h4 className="text-lg font-semibold text-green-900 mb-2">
-                  Face Registration Successful!
+                  {t('voterDetails.faceRegistrationSuccess')}
                 </h4>
                 <p className="text-green-800 mb-2">{faceResult.message}</p>
                 <p className="text-sm text-green-700">
-                  Your face has been registered for voter ID: <strong>{voterId}</strong>
+                  {t('voterDetails.faceRegistered')} <strong>{voterId}</strong>
                 </p>
                 <button
                   onClick={() => {
@@ -230,7 +231,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                   }}
                   className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  Register Another / Verify
+                  {t('voterDetails.registerAnother')}
                 </button>
               </div>
             </div>
@@ -248,7 +249,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
               <div className="flex-1">
                 <h4 className={`text-lg font-semibold mb-2 ${faceResult.verified ? 'text-green-900' : 'text-yellow-900'
                   }`}>
-                  {faceResult.verified ? 'Face Verification Successful!' : 'Face Verification Failed'}
+                  {faceResult.verified ? t('voterDetails.faceVerificationSuccess') : t('voterDetails.faceVerificationFailed')}
                 </h4>
                 <p className={faceResult.verified ? 'text-green-800' : 'text-yellow-800'}>
                   {faceResult.message}
@@ -256,7 +257,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                 {faceResult.confidence !== undefined && faceResult.confidence > 0 && (
                   <p className={`text-sm mt-2 ${faceResult.verified ? 'text-green-700' : 'text-yellow-700'
                     }`}>
-                    Confidence: {(faceResult.confidence * 100).toFixed(1)}%
+                    {t('voterDetails.confidence')} {(faceResult.confidence * 100).toFixed(1)}%
                   </p>
                 )}
                 {faceResult.message && (faceResult.message.toLowerCase().includes('not found') || faceResult.message.toLowerCase().includes('please register')) ? (
@@ -269,7 +270,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                     }}
                     className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
                   >
-                    📷 Register Face
+                    📷 {t('voterDetails.registerFace')}
                   </button>
                 ) : (
                   <button
@@ -279,7 +280,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                     }}
                     className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                   >
-                    Try Again
+                    {t('voterDetails.tryAgain')}
                   </button>
                 )}
               </div>
@@ -295,8 +296,8 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
               <div className="flex-1">
                 <h4 className="text-lg font-semibold text-red-900 mb-2">
                   {faceError.toLowerCase().includes('not found') || faceError.toLowerCase().includes('please register')
-                    ? 'Face Not Registered'
-                    : 'Error'}
+                    ? t('voterDetails.faceNotRegistered')
+                    : t('common.error')}
                 </h4>
                 <p className="text-red-800 mb-2">{faceError}</p>
                 {faceError.toLowerCase().includes('not found') || faceError.toLowerCase().includes('please register') ? (
@@ -308,7 +309,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                     }}
                     className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
                   >
-                    📷 Register Face
+                    📷 {t('voterDetails.registerFace')}
                   </button>
                 ) : (
                   <button
@@ -318,7 +319,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
                     }}
                     className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
                   >
-                    Try Again
+                    {t('voterDetails.tryAgain')}
                   </button>
                 )}
               </div>
@@ -330,7 +331,7 @@ export default function VoterDetails({ data }: VoterDetailsProps) {
       {/* Raw Data (for debugging) */}
       <details className="mt-4">
         <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
-          View Raw Data (Developer)
+          {t('voterDetails.viewRawData')}
         </summary>
         <pre className="mt-2 p-4 bg-gray-900 text-green-400 rounded-lg text-xs overflow-auto max-h-96">
           {JSON.stringify(data, null, 2)}

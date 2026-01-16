@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface VoterFormProps {
   onSearch: (epicNumber: string, state: string, captchaText: string, captchaId: string) => void
@@ -9,6 +10,7 @@ interface VoterFormProps {
 }
 
 export default function VoterForm({ onSearch, loading }: VoterFormProps) {
+  const { t } = useLanguage()
   const [epicNumber, setEpicNumber] = useState('')
   const [state, setState] = useState('Maharashtra')
   const [captchaText, setCaptchaText] = useState('')
@@ -80,7 +82,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!epicNumber || !captchaText || !captchaId) {
-      alert('Please fill all fields')
+      alert(t('voterForm.fillAllFields'))
       return
     }
     onSearch(epicNumber, state, captchaText, captchaId)
@@ -91,13 +93,13 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">
-            EPIC Number (Voter ID)
+            {t('voterForm.epicNumber')}
           </label>
           <input
             type="text"
             value={epicNumber}
             onChange={(e) => setEpicNumber(e.target.value.toUpperCase())}
-            placeholder="e.g., ABC4567890"
+            placeholder={t('voterForm.epicPlaceholder')}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500"
             required
           />
@@ -105,7 +107,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">
-            State
+            {t('voterForm.state')}
           </label>
           <select
             value={state}
@@ -140,12 +142,12 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-gray-900">
-              CAPTCHA
+              {t('voterForm.captcha')}
             </label>
             {captchaTimestamp && (
               <span className="text-xs text-green-600 flex items-center gap-1">
                 <span className="inline-block w-2 h-2 bg-green-600 rounded-full animate-pulse"></span>
-                Fresh CAPTCHA
+                {t('voterForm.freshCaptcha')}
               </span>
             )}
           </div>
@@ -163,18 +165,18 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
                 <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 h-20 flex items-center justify-center">
                   <span className="text-gray-400 flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
-                    Loading CAPTCHA...
+                    {t('voterForm.loadingCaptcha')}
                   </span>
                 </div>
               ) : (
                 <div className="border border-red-300 rounded-lg p-4 bg-red-50 h-20 flex flex-col items-center justify-center gap-2">
-                  <span className="text-red-600 text-sm font-medium">Failed to load CAPTCHA</span>
+                  <span className="text-red-600 text-sm font-medium">{t('voterForm.failedToLoad')}</span>
                   <button
                     type="button"
                     onClick={() => fetchCaptcha()}
                     className="text-xs text-red-700 hover:text-red-900 underline"
                   >
-                    Click to retry
+                    {t('voterForm.clickToRetry')}
                   </button>
                 </div>
               )}
@@ -185,14 +187,14 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
               disabled={loadingCaptcha}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-black"
             >
-              {loadingCaptcha ? '⏳' : '🔄'} {loadingCaptcha ? 'Loading...' : 'Refresh'}
+              {loadingCaptcha ? '⏳' : '🔄'} {loadingCaptcha ? t('common.loading') : t('common.refresh')}
             </button>
           </div>
           <input
             type="text"
             value={captchaText}
             onChange={(e) => setCaptchaText(e.target.value.toLowerCase())}
-            placeholder="Enter CAPTCHA text"
+            placeholder={t('voterForm.enterCaptcha')}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2 text-gray-900 placeholder-gray-500"
             required
           />
@@ -203,7 +205,7 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
           disabled={loading || loadingCaptcha}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          {loading ? 'Searching...' : 'Search Voter Details'}
+          {loading ? t('voterForm.searching') : t('voterForm.searchVoterDetails')}
         </button>
       </form>
     </div>
