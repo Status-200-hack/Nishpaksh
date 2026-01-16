@@ -45,8 +45,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Translation function with nested key support (e.g., "common.appName")
-  const t = (key: string): string => {
+  // Translation function with nested key support and placeholder replacement
+  const t = (key: string, ...args: string[]): string => {
     const keys = key.split('.')
     let value: any = translations[language]
     
@@ -67,7 +67,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    return typeof value === 'string' ? value : key
+    if (typeof value === 'string') {
+      // Replace placeholders {0}, {1}, etc. with provided arguments
+      return args.reduce((text, arg, index) => {
+        return text.replace(`{${index}}`, arg)
+      }, value)
+    }
+    
+    return key
   }
 
   return (

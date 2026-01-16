@@ -58,6 +58,7 @@ interface Candidate {
 export default function Dashboard() {
     const { t, languageCode: language } = useLanguage()
     const router = useRouter()
+    const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null)
     const [account, setAccount] = useState<string | null>(null)
     const [candidates, setCandidates] = useState<Candidate[]>([])
     const [loading, setLoading] = useState(true)
@@ -311,7 +312,21 @@ export default function Dashboard() {
         setVoteStep('idle')
         setVoteError(null)
         setTxHash(null)
+        setRedirectCountdown(null)
     }
+
+    // Handle countdown and redirect after successful vote
+    useEffect(() => {
+        if (voteStep === 'success' && redirectCountdown !== null && redirectCountdown > 0) {
+            const timer = setTimeout(() => {
+                setRedirectCountdown(redirectCountdown - 1)
+            }, 1000)
+            return () => clearTimeout(timer)
+        } else if (voteStep === 'success' && redirectCountdown === 0) {
+            // Redirect to home page after countdown
+            router.push('/')
+        }
+    }, [voteStep, redirectCountdown, router])
 
     const openVoteModal = (candidate: Candidate) => {
         setSelectedCandidate(candidate)
@@ -353,6 +368,8 @@ export default function Dashboard() {
                 // Vote was queued for offline sync
                 setVoteStep('success')
                 setTxHash(null)
+                // Start countdown for redirect
+                setRedirectCountdown(5)
                 // Store demographics even for queued votes
                 if (typeof window !== 'undefined') {
                     try {
@@ -386,6 +403,8 @@ export default function Dashboard() {
             
             setTxHash(txHash)
             setVoteStep('success')
+            // Start countdown for redirect
+            setRedirectCountdown(5)
         } catch (e: any) {
             // Extract the most helpful error message
             let errorMsg = 'Vote failed'
@@ -523,7 +542,7 @@ export default function Dashboard() {
                                 <h2 className="text-xl font-bold text-white">
                                     {voteStep === 'confirm' && t('dashboard.confirmYourVote')}
                                     {voteStep === 'mining' && t('dashboard.confirmingOnBlockchain')}
-                                    {voteStep === 'success' && t('dashboard.voteCasted')}
+                                    {voteStep === 'success' && t('dashboard.voteSuccessful')}
                                     {voteStep === 'error' && t('dashboard.voteFailed')}
                                 </h2>
                                 <p className="text-sm text-gray-400 mt-1">
@@ -607,26 +626,52 @@ export default function Dashboard() {
                             </div>
                         )}
 
-                        {voteStep === 'success' && txHash && (
-                            <div className="text-sm text-gray-300 mb-4">
-                                <div className="text-green-400 font-semibold mb-1">{t('dashboard.transactionConfirmed')}</div>
-                                <div className="font-mono break-all bg-gray-950/40 border border-gray-800 rounded-lg p-3">
-                                    {txHash}
+                        {voteStep === 'success' && (
+                            <div className="space-y-4 mb-4">
+                                {/* Success Message */}
+                                <div className="bg-green-950/30 border border-green-900/40 rounded-lg p-4">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <div>
+                                            <div className="text-green-400 font-semibold text-lg">{t('dashboard.voteSuccessful')}</div>
+                                            <div className="text-green-200 text-sm mt-1">{t('dashboard.voteSuccessfulMessage')}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
 
-                        {voteStep === 'success' && !txHash && (
-                            <div className="text-sm text-gray-300 mb-4">
-                                <div className="text-yellow-400 font-semibold mb-2 flex items-center gap-2">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    {t('dashboard.voteQueued')}
-                                </div>
-                                <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-3 text-yellow-200">
-                                    {t('dashboard.voteSavedForSync')}
-                                </div>
+                                {/* Transaction Hash (if available) */}
+                                {txHash && (
+                                    <div className="text-sm text-gray-300">
+                                        <div className="text-gray-400 text-xs mb-1">{t('dashboard.transactionConfirmed')}</div>
+                                        <div className="font-mono break-all bg-gray-950/40 border border-gray-800 rounded-lg p-3 text-xs">
+                                            {txHash}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Offline Queue Message (if no txHash) */}
+                                {!txHash && (
+                                    <div className="text-sm text-gray-300">
+                                        <div className="text-yellow-400 font-semibold mb-2 flex items-center gap-2">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            {t('dashboard.voteQueued')}
+                                        </div>
+                                        <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-lg p-3 text-yellow-200">
+                                            {t('dashboard.voteSavedForSync')}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Countdown Message */}
+                                {redirectCountdown !== null && redirectCountdown > 0 && (
+                                    <div className="text-center text-sm text-blue-400 font-medium">
+                                        {t('dashboard.redirectingToHome', redirectCountdown.toString())}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -665,10 +710,10 @@ export default function Dashboard() {
 
                             {voteStep === 'success' && (
                                 <button
-                                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
-                                    onClick={() => router.push(`/results${txHash ? `?tx=${encodeURIComponent(txHash)}` : ''}`)}
+                                    className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
+                                    onClick={() => router.push('/')}
                                 >
-                                    {t('dashboard.viewResults')}
+                                    {t('common.back')}
                                 </button>
                             )}
 
