@@ -144,12 +144,6 @@ export default function VoterForm({ onSearch, loading }: VoterFormProps) {
             <label className="text-sm font-medium text-gray-900">
               {t('voterForm.captcha')}
             </label>
-            {captchaTimestamp && (
-              <span className="text-xs text-green-600 flex items-center gap-1">
-                <span className="inline-block w-2 h-2 bg-green-600 rounded-full animate-pulse"></span>
-                {t('voterForm.freshCaptcha')}
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-4">
             <div className="flex-1">
