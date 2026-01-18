@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { getVotingStats, getTransactionDetails, formatTimestamp, VoteTransaction, getPartyVoteData, getGenderDistribution, getAgeDistribution, getNotaVoteCount, PartyVoteData, GenderDistribution, AgeDistribution } from '@/services/resultsService'
@@ -146,16 +147,15 @@ export default function ResultsPage() {
         <div className="min-h-screen bg-gray-900 text-white flex font-sans">
             {/* Sidebar - Same as Dashboard */}
             <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col hidden md:flex">
-                <div className="p-6 flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
-                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 block">{t('common.appName')}</span>
-                        <p className="text-[10px] text-blue-400 tracking-wider font-semibold">{t('common.tagline')}</p>
-                    </div>
+                <div className="p-6 flex items-center">
+                    <Image 
+                        src="/nishpaksh.png" 
+                        alt="Nishpaksh Logo" 
+                        width={200} 
+                        height={60}
+                        className="object-contain h-12 w-auto"
+                        priority
+                    />
                 </div>
 
                 <nav className="flex-1 px-4 py-6 space-y-2">

@@ -48,6 +48,7 @@ export default function Home() {
   const [showVerification, setShowVerification] = useState(false)
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
   const verificationRef = useRef<HTMLDivElement>(null)
+  const voterDetailsRef = useRef<HTMLDivElement>(null)
 
   const handleWalletConnect = (address: string) => {
     setWalletAddress(address)
@@ -95,6 +96,12 @@ export default function Home() {
 
       if (data.success) {
         setVoterData(data.data)
+        
+        // Auto-scroll to voter details after a short delay
+        setTimeout(() => {
+          voterDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 100)
+        
         // Store EPIC number and voter demographics in localStorage for voting
         if (typeof window !== 'undefined' && epicNumber) {
           const epicUpper = epicNumber.toUpperCase()
@@ -151,23 +158,15 @@ export default function Home() {
       <nav className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
-                </svg>
-              </div>
-              <div>
-                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">{t('common.appName')}</span>
-                <p className="text-[10px] text-blue-400 tracking-wider font-semibold">{t('common.tagline')}</p>
-              </div>
-            </div>
-
-            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
-              <a href="#" className="hover:text-white transition-colors">{t('nav.security')}</a>
-              <a href="#" className="hover:text-white transition-colors">{t('nav.howItWorks')}</a>
-              <a href="#" className="hover:text-white transition-colors">{t('nav.faqs')}</a>
-              <a href="#" className="hover:text-white transition-colors">{t('nav.whitepaper')}</a>
+            <div className="flex items-center">
+              <Image 
+                src="/nishpaksh.png" 
+                alt="Nishpaksh Logo" 
+                width={200} 
+                height={60}
+                className="object-contain h-16 w-auto"
+                priority
+              />
             </div>
 
             <div className="flex items-center gap-4">
@@ -231,11 +230,12 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/10 to-purple-500/10 z-0"></div>
                 <div className="relative w-full h-full min-h-[400px] flex items-center justify-center">
                   <Image
-                    src="/voterid3d1.png"
-                    alt="Voter ID 3D"
+                    src="/hero.gif"
+                    alt="Nishpaksh Blockchain Voting Hero"
                     fill
                     className="object-cover rounded-lg"
                     priority
+                    unoptimized
                   />
                 </div>
               </div>
@@ -328,7 +328,7 @@ export default function Home() {
                 )}
 
                 {voterData && (
-                  <div className="mt-8 border-t border-gray-800 pt-8">
+                  <div ref={voterDetailsRef} className="mt-8 border-t border-gray-800 pt-8">
                     <VoterDetails data={voterData} />
                   </div>
                 )}

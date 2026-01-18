@@ -6,8 +6,13 @@ import { LanguageProvider } from '@/contexts/LanguageContext'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Voter ID Checker - ECI',
-  description: 'Check your voter ID details from Election Commission of India',
+  title: 'Nishpaksh',
+  description: 'Blockchain-based transparent voting system with face recognition',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 }
 
 export default function RootLayout({
