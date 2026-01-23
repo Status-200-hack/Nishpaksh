@@ -8,26 +8,23 @@ export const revalidate = 0
 
 export async function GET() {
   try {
-    // Prefer a standard Next.js `public/ward-data.geojson` if present,
-    // otherwise fall back to the existing file at the repo level.
-    const candidatePaths = [
-      path.join(process.cwd(), 'public', 'ward-data.geojson'),
-      path.join(process.cwd(), '..', '2025-ward-data (1).geojson'),
-    ]
+    // Load ward data from public folder
+    const wardDataPath = path.join(process.cwd(), 'public', 'ward-data.geojson')
 
     let raw: string | null = null
-    for (const p of candidatePaths) {
-      try {
-        raw = await readFile(p, 'utf8')
-        break
-      } catch {
-        // keep trying
-      }
+    try {
+      raw = await readFile(wardDataPath, 'utf8')
+    } catch (error) {
+      console.error('Failed to read ward-data.geojson:', error)
+      return NextResponse.json(
+        { error: 'Ward GeoJSON not found. Please ensure ward-data.geojson exists in the public folder.' },
+        { status: 404 }
+      )
     }
 
     if (!raw) {
       return NextResponse.json(
-        { error: 'Ward GeoJSON not found on server' },
+        { error: 'Ward GeoJSON file is empty' },
         { status: 404 }
       )
     }

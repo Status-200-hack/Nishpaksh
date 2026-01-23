@@ -136,9 +136,9 @@ voter-checker/.hardhat/
 # General
 # ============================================
 
-# Large data files
+# Large data files (but keep ward data for the app)
 *.geojson
-!voter-checker/public/**/*.geojson
+!voter-checker/public/ward-data.geojson
 
 # Backup files
 *.bak
