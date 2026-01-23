@@ -217,6 +217,20 @@
     "connectWallet": "Connect Wallet",
     "metaMaskNotInstalled": "MetaMask is not installed. Please install it to use this feature.",
     "notConnected": "Not Connected"
+  },
+  "footer": {
+    "tagline": "Empowering democracy through blockchain technology. Secure, transparent, and immutable voting for the world's largest democracy.",
+    "quickLinks": "Quick Links",
+    "resources": "Resources",
+    "legal": "Legal",
+    "documentation": "Documentation",
+    "api": "API",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "contact": "Contact",
+    "support": "Support",
+    "allRightsReserved": "All rights reserved.",
+    "networkStatus": "Network Live"
   }
 }
 

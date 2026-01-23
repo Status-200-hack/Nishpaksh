@@ -12,7 +12,7 @@ type Translations = typeof enTranslations
 interface LanguageContextType {
   language: Language
   setLanguage: (lang: Language) => void
-  t: (key: string) => string
+  t: (key: string, ...args: string[]) => string
   languageCode: 'en' | 'hi' | 'mr'
 }
 

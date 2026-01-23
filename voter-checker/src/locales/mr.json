@@ -217,6 +217,20 @@
     "connectWallet": "वॉलेट कनेक्ट करा",
     "metaMaskNotInstalled": "MetaMask स्थापित नाही। ही वैशिष्ट्य वापरण्यासाठी कृपया ते स्थापित करा।",
     "notConnected": "कनेक्ट नाही"
+  },
+  "footer": {
+    "tagline": "ब्लॉकचेन तंत्रज्ञानाद्वारे लोकशाहीला सक्षम करणे। जगातील सर्वात मोठ्या लोकशाहीसाठी सुरक्षित, पारदर्शक आणि अपरिवर्तनीय मतदान।",
+    "quickLinks": "द्रुत दुवे",
+    "resources": "संसाधने",
+    "legal": "कायदेशीर",
+    "documentation": "प्रलेखन",
+    "api": "API",
+    "privacyPolicy": "गोपनीयता धोरण",
+    "termsOfService": "सेवा अटी",
+    "contact": "संपर्क",
+    "support": "आधार",
+    "allRightsReserved": "सर्व हक्क सुरक्षित।",
+    "networkStatus": "नेटवर्क लाइव्ह"
   }
 }
 
