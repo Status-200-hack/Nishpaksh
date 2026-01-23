@@ -9,9 +9,9 @@ export default function LanguageSwitcher() {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const languages = [
-    { code: 'en' as const, name: 'English', flag: '🇬🇧' },
-    { code: 'hi' as const, name: 'हिंदी', flag: '🇮🇳' },
-    { code: 'mr' as const, name: 'मराठी', flag: '🇮🇳' },
+    { code: 'en' as const, name: 'English', flag: 'EN' },
+    { code: 'hi' as const, name: 'हिंदी', flag: 'HN' },
+    { code: 'mr' as const, name: 'मराठी', flag: 'MR' },
   ]
 
   const currentLanguage = languages.find(lang => lang.code === language) || languages[0]
