@@ -15,6 +15,11 @@ Why DeepFace?
 - Lets us stay fully local/offline once models are downloaded
 """
 
+# Force CPU-only mode (Render free tier has no GPU)
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA completely
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TensorFlow warnings
+
 import base64
 import inspect
 from typing import Optional

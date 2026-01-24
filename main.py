@@ -6,6 +6,13 @@ No Selenium needed - purely API-based approach.
 FastAPI Backend with EPIC/CAPTCHA functionality and Face Recognition endpoints.
 """
 
+# ===== CRITICAL: Force CPU-only mode for Render (no GPU available) =====
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA completely
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TensorFlow warnings
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'false'
+# ===== End CPU-only configuration =====
+
 import requests
 import json
 import base64
