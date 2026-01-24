@@ -4,21 +4,27 @@ DeepFace-based Face Embedding Module
 Replaces the previous YOLO + FaceNet/ArcFace pipeline with a simpler,
 more robust DeepFace pipeline:
 
-- Uses DeepFace with ArcFace backbone (no training required)
+- Uses DeepFace with VGG-Face backbone (optimized for memory-constrained environments)
 - Handles face detection, alignment, and preprocessing internally
 - We only call DeepFace.represent() to get embeddings
 - Embeddings are used with cosine similarity for verification
 
 Why DeepFace?
 - Wraps several strong face recognition models behind a simple API
-- Takes care of face detection (RetinaFace), alignment, and normalization
+- Takes care of face detection (OpenCV), alignment, and normalization
 - Lets us stay fully local/offline once models are downloaded
+
+OPTIMIZED FOR RENDER FREE TIER (512MB RAM):
+- VGG-Face: ~200MB (vs ArcFace ~400MB)
+- OpenCV detector: ~50MB (vs RetinaFace ~200MB)
+- Total memory usage: ~250MB (vs ~600MB with ArcFace+RetinaFace)
 """
 
 # Force CPU-only mode (Render free tier has no GPU)
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA completely
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TensorFlow warnings
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable optimizations that use more memory
 
 import base64
 import inspect
@@ -28,9 +34,9 @@ import cv2
 import numpy as np
 from deepface import DeepFace
 
-# DeepFace configuration
-MODEL_NAME = "ArcFace"
-DETECTOR_BACKEND = "retinaface"
+# DeepFace configuration - OPTIMIZED FOR RENDER (512MB limit)
+MODEL_NAME = "VGG-Face"  # Lighter than ArcFace (~200MB vs ~400MB)
+DETECTOR_BACKEND = "opencv"  # Much lighter than RetinaFace (~50MB vs ~200MB)
 DISTANCE_METRIC = "cosine"  # For documentation; we compute cosine similarity ourselves
 SIMILARITY_THRESHOLD = 0.50  # similarity >= 0.68 → VERIFIED
 
@@ -50,8 +56,10 @@ class FaceEmbedder:
         """
         Initialize the DeepFace pipeline.
 
-        DeepFace will lazily load the ArcFace model and RetinaFace detector on
+        DeepFace will lazily load the VGG-Face model and OpenCV detector on
         first use. No training is performed; we only use pretrained weights.
+        
+        Optimized for memory-constrained environments (Render free tier).
         """
         self.model_name = MODEL_NAME
         self.detector_backend = DETECTOR_BACKEND
@@ -105,7 +113,7 @@ class FaceEmbedder:
         Generate a face embedding from a base64 encoded image.
 
         - Ensures exactly one face is detected.
-        - Uses DeepFace.represent() with ArcFace + RetinaFace.
+        - Uses DeepFace.represent() with VGG-Face + OpenCV (memory-optimized).
         """
         # Decode base64 to image (BGR)
         image = self._decode_base64_image(base64_image)

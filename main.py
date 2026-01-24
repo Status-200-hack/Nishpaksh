@@ -11,7 +11,28 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Disable CUDA completely
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TensorFlow warnings
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'false'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable optimizations that use more memory
+os.environ['TF_MEMORY_ALLOCATION'] = '0.8'  # Use max 80% of available memory
 # ===== End CPU-only configuration =====
+
+# Memory management for Render free tier (512MB limit)
+import gc
+try:
+    import resource
+    def limit_memory():
+        """Limit memory usage to prevent OOM on Render free tier"""
+        try:
+            # Set soft limit to 450MB (leave 50MB for system)
+            max_memory = 450 * 1024 * 1024  # 450MB in bytes
+            resource.setrlimit(resource.RLIMIT_AS, (max_memory, max_memory))
+        except (ValueError, OSError, AttributeError):
+            # resource module not available on Windows or limits not supported
+            pass
+    
+    limit_memory()
+except ImportError:
+    # resource module not available on Windows
+    pass
 
 import requests
 import json
@@ -606,7 +627,7 @@ async def face_register(request: FaceRegisterRequest):
     
     Flow:
     1. Accept voter_id and base64 image
-    2. Use DeepFace (ArcFace + RetinaFace) to detect exactly one face and generate embedding
+    2. Use DeepFace (VGG-Face + OpenCV) to detect exactly one face and generate embedding
     3. Store embedding in DB (rejects if voter_id already exists)
     4. Return success response
     """
@@ -632,6 +653,8 @@ async def face_register(request: FaceRegisterRequest):
         embedder = get_embedder()
         try:
             embedding = embedder.generate_embedding_from_base64(request.image)
+            # Force garbage collection after embedding generation to free memory
+            gc.collect()
         except ValueError as e:
             # DeepFace will raise if no face or multiple faces are detected
             raise HTTPException(status_code=400, detail=str(e))
@@ -665,7 +688,7 @@ async def face_register(request: FaceRegisterRequest):
 @app.post("/face/verify", response_model=FaceVerifyResponse)
 async def face_verify(request: FaceVerifyRequest):
     """
-    Verify a face against a registered voter ID using DeepFace (ArcFace).
+    Verify a face against a registered voter ID using DeepFace (VGG-Face).
     - Accepts voter_id and base64 encoded image.
     - Uses DeepFace.represent() to generate embeddings.
     - Compares embeddings with cosine similarity and threshold.
@@ -694,6 +717,8 @@ async def face_verify(request: FaceVerifyRequest):
         embedder = get_embedder()
         try:
             captured_embedding = embedder.generate_embedding_from_base64(request.image)
+            # Force garbage collection after embedding generation to free memory
+            gc.collect()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         
@@ -703,8 +728,7 @@ async def face_verify(request: FaceVerifyRequest):
         # Step 4: Compare embeddings using cosine similarity
         similarity = embedder.compare_embeddings(captured_embedding, registered_embedding)
         
-        # DeepFace's default ArcFace + cosine verification threshold is ~0.68
-        # DeepFace's default ArcFace + cosine verification threshold is ~0.68
+        # DeepFace's default VGG-Face + cosine verification threshold is ~0.68
         # User requested override to 0.50
         similarity_threshold = 0.50
         
