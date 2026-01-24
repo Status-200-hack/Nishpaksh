@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward request to FastAPI backend
+    // Face recognition can take 90-120 seconds on Render free tier (ML model loading + processing)
     const response = await fetch(`${FASTAPI_URL}/face/register`, {
       method: 'POST',
       headers: {
@@ -30,13 +31,36 @@ export async function POST(request: NextRequest) {
         image,
         full_name,
       }),
+      signal: AbortSignal.timeout(180000), // 180 second (3 minute) timeout for ML processing
     })
 
-    const data = await response.json()
+    // Check if response has content
+    const contentType = response.headers.get('content-type')
+    const text = await response.text()
+    
+    // Handle empty response
+    if (!text || text.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Backend returned empty response. The service might be starting up. Please try again in a moment.' },
+        { status: response.status || 500 }
+      )
+    }
+
+    // Try to parse JSON
+    let data: any
+    try {
+      data = JSON.parse(text)
+    } catch (parseError) {
+      console.error('Failed to parse backend response:', text.substring(0, 200))
+      return NextResponse.json(
+        { success: false, error: `Backend returned invalid response: ${text.substring(0, 100)}` },
+        { status: response.status || 500 }
+      )
+    }
 
     if (!response.ok) {
       return NextResponse.json(
-        { success: false, error: data.detail || data.message || 'Registration failed' },
+        { success: false, error: data.detail || data.message || data.error || 'Registration failed' },
         { status: response.status }
       )
     }
@@ -47,6 +71,26 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Face registration error:', error)
+    
+    // Handle timeout errors
+    if (error.name === 'AbortError' || error.name === 'TimeoutError' || error.message?.includes('timeout')) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Request timed out. Face recognition processing is taking longer than expected. This can happen on the first request (backend spinning up) or with large images. Please try again - subsequent requests should be faster.' 
+        },
+        { status: 504 }
+      )
+    }
+    
+    // Handle network errors
+    if (error.message?.includes('fetch') || error.message?.includes('network')) {
+      return NextResponse.json(
+        { success: false, error: 'Unable to connect to backend service. Please check if the service is running.' },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
       { success: false, error: error.message || 'Internal server error' },
       { status: 500 }

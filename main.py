@@ -490,6 +490,15 @@ async def root():
         }
     }
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring and keeping service warm."""
+    return {
+        "status": "healthy",
+        "service": "Nishpaksh API",
+        "version": "1.0.0"
+    }
+
 @app.get("/captcha/generate", response_model=GenerateCaptchaResponse)
 async def generate_captcha():
     """
