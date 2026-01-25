@@ -21,11 +21,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-<<<<<<< HEAD
-    // Forward request to FastAPI backend
-    // Face recognition can take 90-120 seconds on Render free tier (ML model loading + processing)
-    const response = await fetch(`${FASTAPI_URL}/face/verify`, {
-=======
     // Ensure API_BASE is configured
     if (!API_BASE) {
       throw new Error(
@@ -35,7 +30,6 @@ export async function POST(request: NextRequest) {
 
     // Forward request to FastAPI backend using unified API_BASE
     const response = await fetch(`${API_BASE}/face/verify`, {
->>>>>>> 1dc28f0 (fixed backend)
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
