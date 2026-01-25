@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Disable caching for this API route
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// FastAPI backend URL - adjust if needed
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000'
+const API_BASE =
+  process.env.INTERNAL_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,9 +19,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Forward request to FastAPI backend
-    // Face recognition can take 90-120 seconds on Render free tier (ML model loading + processing)
-    const response = await fetch(`${FASTAPI_URL}/face/register`, {
+    if (!API_BASE) {
+      throw new Error('API base URL not configured. Set INTERNAL_API_BASE_URL or NEXT_PUBLIC_API_BASE_URL in .env.local')
+    }
+
+    // Temporary log to verify env value
+    console.log('API BASE:', process.env.NEXT_PUBLIC_API_BASE_URL)
+
+    const response = await fetch(`${API_BASE}/face/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,14 +36,10 @@ export async function POST(request: NextRequest) {
         image,
         full_name,
       }),
-      signal: AbortSignal.timeout(180000), // 180 second (3 minute) timeout for ML processing
     })
 
-    // Check if response has content
-    const contentType = response.headers.get('content-type')
     const text = await response.text()
-    
-    // Handle empty response
+
     if (!text || text.trim().length === 0) {
       return NextResponse.json(
         { success: false, error: 'Backend returned empty response. The service might be starting up. Please try again in a moment.' },
@@ -46,7 +47,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Try to parse JSON
     let data: any
     try {
       data = JSON.parse(text)
@@ -71,30 +71,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Face registration error:', error)
-    
-    // Handle timeout errors
-    if (error.name === 'AbortError' || error.name === 'TimeoutError' || error.message?.includes('timeout')) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Request timed out. Face recognition processing is taking longer than expected. This can happen on the first request (backend spinning up) or with large images. Please try again - subsequent requests should be faster.' 
-        },
-        { status: 504 }
-      )
-    }
-    
-    // Handle network errors
-    if (error.message?.includes('fetch') || error.message?.includes('network')) {
-      return NextResponse.json(
-        { success: false, error: 'Unable to connect to backend service. Please check if the service is running.' },
-        { status: 503 }
-      )
-    }
-    
     return NextResponse.json(
       { success: false, error: error.message || 'Internal server error' },
       { status: 500 }
     )
   }
 }
-
