@@ -4,8 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// FastAPI backend URL - adjust if needed
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000'
+// Unified FastAPI backend base URL - prefer internal on server, fallback to public
+const API_BASE =
+  process.env.INTERNAL_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,9 +21,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+<<<<<<< HEAD
     // Forward request to FastAPI backend
     // Face recognition can take 90-120 seconds on Render free tier (ML model loading + processing)
     const response = await fetch(`${FASTAPI_URL}/face/verify`, {
+=======
+    // Ensure API_BASE is configured
+    if (!API_BASE) {
+      throw new Error(
+        'API base URL not configured. Set INTERNAL_API_BASE_URL or NEXT_PUBLIC_API_BASE_URL in .env.local'
+      )
+    }
+
+    // Forward request to FastAPI backend using unified API_BASE
+    const response = await fetch(`${API_BASE}/face/verify`, {
+>>>>>>> 1dc28f0 (fixed backend)
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -96,4 +110,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
